@@ -7,3 +7,5 @@ dev-dist/
 # Dado da casa: lista real, preços e orçamento. Fica só neste computador.
 feira-backup-*.json
 gerador-lista.html
+
+.gh-pages/

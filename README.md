@@ -62,8 +62,33 @@ check-marks rather than just the open one.
 
 ## Deploying
 
-`npm run build` produces a static `dist/`. `base` is `./`, so it works from any
-path — a subfolder, GitHub Pages, Netlify drop, anywhere. Nothing server-side.
+Live at <https://gabrielfontineli.github.io/feira-app/>. To publish the current
+working tree:
+
+```bash
+npm run deploy    # build, then push dist/ to the gh-pages branch
+```
+
+`tools/deploy.mjs` copies `dist/` into a throwaway worktree, wipes the previous
+build first so hashed assets don't accumulate, and no-ops when the output is
+byte-identical. It uses a branch rather than a GitHub Actions workflow because
+that needs no `workflow` token scope. The repository is private; the published
+site is public, which is the point — the app is public, the household's data is
+not.
+
+`base` is `./`, so `dist/` also works from any other path or host with no
+config change. Nothing server-side.
+
+## Privacy
+
+The repository holds no personal data. The real shopping list, its prices, the
+monthly budget and the household notes live in two gitignored local files
+(`gerador-lista.html`, `feira-backup-*.json`) — they are inputs, not source.
+The example dataset shipped in the bundle is anonymised, and the app no longer
+defaults the budget to one household's number.
+
+At runtime nothing is transmitted: `localStorage` only, no analytics, no fonts
+or scripts from third-party origins.
 
 ## Known issues in the ported logic
 
