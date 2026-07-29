@@ -1,0 +1,9 @@
+<!-- Fonte da versão maskable: fundo sangrado e cesta a 66% pra sobreviver ao
+     recorte circular do Android. Só serve pra gerar PNG, não vai pro dist. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <rect width="100" height="100" fill="#3a7d54"/>
+  <g transform="translate(50 50) scale(0.66) translate(-50 -48)">
+    <path d="M28 34h44l-5 38H33z" fill="none" stroke="#fff" stroke-width="7" stroke-linejoin="round"/>
+    <path d="M40 34a10 10 0 0120 0" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round"/>
+  </g>
+</svg>
