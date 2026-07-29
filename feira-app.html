@@ -864,8 +864,21 @@ document.getElementById('btnCopy').addEventListener('click',async()=>{
 /* =====================================================================
    BACKUP
    ===================================================================== */
-document.getElementById('btnExport').addEventListener('click',()=>{
-  const dump={app:'feira',v:1,exportado:new Date().toISOString(),cfg,itens,base,checks:{[kCheck()]:checks}};
+/* Varre os meses guardados (24 pra trás, 3 pra frente) pra não perder histórico:
+   o backup antigo só levava o mês aberto na hora da exportação. */
+async function allChecks(){
+  const out={};
+  for(let i=-24;i<=3;i++){
+    const d=new Date(ym.y,ym.m+i,1);
+    const k='check:'+d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    if(out[k])continue;
+    const v=(k===kCheck())?checks:await dget(k);
+    if(v&&Object.keys(v).length)out[k]=v;
+  }
+  return out;
+}
+document.getElementById('btnExport').addEventListener('click',async()=>{
+  const dump={app:'feira',v:1,exportado:new Date().toISOString(),cfg,itens,base,checks:await allChecks()};
   const blob=new Blob([JSON.stringify(dump,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download='feira-backup-'+ym.y+'-'+String(ym.m+1).padStart(2,'0')+'.json';
@@ -882,7 +895,10 @@ document.getElementById('fileInput').addEventListener('change',e=>{
       const d=JSON.parse(rd.result);
       if(!d||!Array.isArray(d.itens))throw new Error('formato');
       cfg=Object.assign(cfg,d.cfg||{});itens=d.itens;base=d.base||{};
-      if(d.checks&&d.checks[kCheck()])checks=d.checks[kCheck()];
+      if(d.checks&&typeof d.checks==='object'){
+        for(const[k,v]of Object.entries(d.checks)){if(/^check:\d{4}-\d{2}$/.test(k)&&v)await dset(k,v);}
+        checks=d.checks[kCheck()]||{};
+      }
       cfg.started=1;saveAll();await dset(kCheck(),checks);
       bindCfg();showCfg();go(4);toast(itens.length+' itens importados');
     }catch(err){alert('Não consegui ler esse arquivo. Ele precisa ser um backup .json exportado pelo próprio app.');}
