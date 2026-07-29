@@ -17,7 +17,7 @@ const cfg: Cfg = {
   pessoas: 2,
   dias: 30,
   loss: 25,
-  vale: 2200,
+  vale: 0, // não entra em nenhuma conta daqui, só no "sobra/passa" da tela
   limpeza: 1,
   higiene: 1,
   extras: 0,

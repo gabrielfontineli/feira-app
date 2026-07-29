@@ -3,3 +3,7 @@ dist/
 dev-dist/
 *.zip
 .DS_Store
+
+# Dado da casa: lista real, preços e orçamento. Fica só neste computador.
+feira-backup-*.json
+gerador-lista.html

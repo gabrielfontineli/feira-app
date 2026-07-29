@@ -20,7 +20,8 @@
     feira.base = structuredClone(EX_BASE);
     feira.itens = exampleItems();
     feira.cfg.started = 1;
-    feira.cfg.vale = feira.cfg.vale || 2200;
+    /* Sem chutar orçamento: o valor antigo era pessoal de uma casa só.
+       vale=0 significa "não informado" e o resumo simplesmente não compara. */
     toast.show(feira.itens.length + ' itens carregados');
   }
 </script>

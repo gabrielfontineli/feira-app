@@ -621,7 +621,7 @@ document.getElementById('tplEx').addEventListener('click',()=>{
   base=JSON.parse(JSON.stringify(EX_BASE));
   itens=EX_RAW.map(r=>({id:nid(),name:r[0],cat:r[1],freq:r[2],qty:r[3],unit:r[4],price:r[5],
     cook:!!r[6],on:!!r[7],nota:r[8]||''}));
-  cfg.started=1;cfg.vale=cfg.vale||2200;saveAll();showCfg();
+  cfg.started=1;saveAll();showCfg(); /* não chuta orçamento: era um valor pessoal */
   document.getElementById('qVale').value=cfg.vale;
   toast(itens.length+' itens carregados');
 });
