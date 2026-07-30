@@ -123,12 +123,22 @@ try {
   check('62 itens ligados na lista', itemCount === 62, String(itemCount));
 
   // Marca o primeiro item e confere o contador.
-  await evaluate(`document.querySelector('.item').click()`);
+  await evaluate(`document.querySelector('.item .tick').click()`);
   await sleep(200);
   const done = await evaluate(
     `[...document.querySelectorAll('.summary .s')].find(s=>s.textContent.includes('comprado')).querySelector('.v').textContent.trim()`,
   );
   check('marcar item atualiza o contador', done === '1 / 62', done);
+
+  // Digita o preço no item marcado: é o caminho principal pra aprender preço.
+  const preco = await evaluate(`(() => {
+    const el = document.querySelector('.item .paid input');
+    if (!el) return 'sem campo';
+    el.value = '9,90';
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    return el.value;
+  })()`);
+  check('digitar o preço ao riscar o item', preco === '9,90', preco);
 
   const persisted = await evaluate(
     `Object.keys(localStorage).filter(k=>k.startsWith('feira:')).sort().join(',')`,
