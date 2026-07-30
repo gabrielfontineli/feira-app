@@ -166,6 +166,32 @@ Decisões que valem saber:
 - O passo da nota continua sendo o índice 1. O `Steps.svelte` só o omite do nav,
   pra não renumerar todo `go(n)`.
 
+## A lista, depois da repaginação
+
+Spec em `docs/superpowers/specs/2026-07-30-lista-ux-design.md`.
+
+- **`suggest.ts` usa o `DIC` pra montar lista**, não só pra ler nota. Ranking é
+  exato → prefixo → substring: `maca` inteiro é a maçã, não o macarrão.
+  De propósito **não** aplica `allowed()` — os interruptores de limpeza,
+  higiene e extras filtram o que o app sugere sozinho; aqui foi você que
+  digitou o nome.
+- **`AddItem.svelte` serve as duas telas** por uma prop `modo`. No mercado ele
+  vive dentro do `.summary` grudento, colapsado num `<details>` nativo; no
+  planejamento nasce aberto. Os botões `hoje`/`mês` ficam na linha da sugestão
+  pra adicionar continuar sendo um toque.
+- **`Item.soHoje` ('AAAA-MM') é o avulso da ida.** Some sozinho no mês seguinte,
+  sem varredura. Escolhido em vez de armazenamento paralelo porque um `Item`
+  comum já atravessa `itemCost`, `byCategory`, o backup e as chaves por slug.
+  Quem filtra é `feira.naLista()` — use ela, não `i.on`, em qualquer total.
+- **A lista agrupa por categoria**, não por frequência: no mercado você anda por
+  corredor. `byCategory` já existia e já respeitava `CATORDER`; só estava sendo
+  chamado um nível fundo demais. Frequência virou etiqueta (`FREQ[f].s`) e
+  continua mandando em `qtyPorIda`.
+- **Item marcado fica no lugar.** Ordem estável é o que deixa decorar onde as
+  coisas estão. Não reordenar ao marcar.
+- Avulso de mês passado continua em `feira.itens`, visível e apagável no editor.
+  Sem limpeza automática: seria apagar dado do usuário pelas costas.
+
 ## Fase 3 — sincronizar entre aparelhos (proposta antes de código)
 
 Duas pessoas, uma lista, os mesmos check-marks. Restrições dadas:
@@ -180,9 +206,9 @@ Nada de código antes de a abordagem ser aprovada.
 
 ## Limpezas de UX (quando sair barato)
 
-- busca/filtro no editor e categorias que colapsam;
 - categorias renomeáveis, adicionáveis e reordenáveis pelo usuário, no lugar do
-  `CATORDER` fixo em `src/lib/dic.ts` (consumido por `src/lib/group.ts`);
+  `CATORDER` fixo em `src/lib/dic.ts` (consumido por `src/lib/group.ts`). É o
+  spec 2 já acordado: mexe em `Item.cat` de todo item salvo e pede migração;
 - gasto por categoria na lista final;
 - comparação de gasto mês a mês, a partir do histórico guardado;
 - Web Share API no "copiar como texto" e na exportação, pra funcionar no
