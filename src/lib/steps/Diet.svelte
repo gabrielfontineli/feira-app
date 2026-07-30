@@ -1,6 +1,6 @@
 <script lang="ts">
   import { norm } from '../format';
-  import { matchDic } from '../parseNF';
+  import { matchDic } from '../match';
   import { allowed, itemFromDic, itemFromLine } from '../quantity';
   import { feira } from '../state.svelte';
 

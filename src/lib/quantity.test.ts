@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchDic } from './parseNF';
+import { matchDic } from './match';
 import { idasNoMes, itemCost, itemFromDic, LOSS_MAX, qtyPorIda, rawQty, sugQty } from './quantity';
 import type { Cfg, Item } from './types';
 

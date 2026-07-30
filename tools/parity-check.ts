@@ -8,7 +8,8 @@
 import assert from 'node:assert/strict';
 import { DIC } from '../src/lib/dic';
 import { EX_BASE, exampleItems } from '../src/lib/example';
-import { matchDic, parseNF } from '../src/lib/parseNF';
+import { matchDic } from '../src/lib/match';
+import { parseNF } from '../src/lib/parseNF';
 import { learnPrices } from '../src/lib/prices';
 import { itemCost, rawQty, sugQty } from '../src/lib/quantity';
 import type { Cfg } from '../src/lib/types';

@@ -1,5 +1,5 @@
 import { prettify } from './format';
-import { matchDic } from './parseNF';
+import { matchDic } from './match';
 import type { DicEntry, NFRow, PriceBase, PriceEntry } from './types';
 
 /**

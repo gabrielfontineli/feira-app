@@ -1,6 +1,5 @@
-import { DIC } from './dic';
-import { norm, toNum } from './format';
-import type { DicEntry, NFRow } from './types';
+import { toNum } from './format';
+import type { NFRow } from './types';
 
 export const UNITS = /^(un|unid|unidade|kg|g|pacote|pct|pc|cx|lt|l|ml|dz|fardo|rolo|pote|lata|fd)$/i;
 
@@ -68,11 +67,4 @@ export function parseNF(text: string): ParseResult {
     out.push({ desc, qty: qty > 0 ? qty : 1, unit: t[ui].toLowerCase(), unitPrice });
   });
   return { rows: out, skipped };
-}
-
-/** Primeira entrada do dicionário cuja palavra-chave aparece na descrição. */
-export function matchDic(s: string): DicEntry | null {
-  const d = norm(s);
-  for (const e of DIC) for (const k of e.k) if (d.includes(norm(k))) return e;
-  return null;
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { NF_ESPACO_SIMPLES, NF_ESPACOS, NF_TAB } from './nf.fixtures';
-import { matchDic, parseNF } from './parseNF';
+import { parseNF } from './parseNF';
 
 describe('parseNF · nota separada por tabulação', () => {
   const { rows, skipped } = parseNF(NF_TAB);
@@ -87,21 +87,5 @@ describe('parseNF · nota colapsada em espaço simples', () => {
   it('ignora total e CNPJ', () => {
     expect(rows).toHaveLength(4);
     expect(skipped).toHaveLength(2);
-  });
-});
-
-describe('matchDic', () => {
-  it('casa descrição de nota com o nome canônico do dicionário', () => {
-    expect(matchDic('FILE PEITO FGO SADIA BD 1KG')?.n).toBe('Filé de frango');
-    expect(matchDic('OVO BRANCO GRANDE')?.n).toBe('Ovos');
-    expect(matchDic('TOMATE ITALIANO')?.n).toBe('Tomate');
-  });
-
-  it('ignora acento e caixa', () => {
-    expect(matchDic('brócolis ninja')?.n).toBe('Brócolis');
-  });
-
-  it('devolve null quando nada casa', () => {
-    expect(matchDic('ZZZZ PRODUTO DESCONHECIDO')).toBeNull();
   });
 });
