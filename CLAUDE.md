@@ -129,6 +129,43 @@ Decisões que valem saber antes de mexer:
   regressão, é o comportamento de sempre, e o casamento difuso não ajuda porque
   o literal ganha antes.
 
+## Preço vem da lista, não da nota
+
+O caminho principal pra aprender preço é digitar o **preço unitário** ao riscar
+o item na lista. A nota fiscal virou importação em lote, fora do wizard,
+alcançável pelo backup.
+
+Por quê, com o que a pesquisa fechou (julho de 2026):
+
+- **O QR Code da NFC-e não tem os itens.** Carrega `chNFe`, `nVersao`, `tpAmb`,
+  `cDest`, `dhEmi`, `vNF`, `vICMS`, `digVal`, `cIdToken`, `cHashQRCode`. Total
+  da nota, sim; preço unitário por produto, não.
+- **Nenhuma SEFAZ manda CORS.** Conferido em MG, SP e RS: sem
+  `access-control-allow-origin`, `fetch` do navegador é bloqueado. Contornar
+  exige proxy — servidor pra manter e a chave da nota saindo do aparelho.
+- **RN, que é o caso de uso:** `nfce.set.rn.gov.br` serve certificado que cobre
+  só `*.sefaz.rn.gov.br` e o navegador barra. O host bom,
+  `nfce.sefaz.rn.gov.br/portalDFE/NFCe/ConsultaNFCe.aspx`, tem captcha
+  (`txt_cod_antirobo`) e `__VIEWSTATE` de WebForms.
+- **iPhone não tem `BarcodeDetector`.** WebKit não implementa.
+
+Não reabrir "ler o QR code" sem que um destes quatro tenha mudado.
+
+Decisões que valem saber:
+
+- **`registrarPago` guarda o `PriceEntry` anterior.** A EWMA é exponencial:
+  corrigir um valor digitado errado sem desfazer o anterior deixaria o preço de
+  orçar entre os dois. Corrigir restaura e refunde. O teste que prova isso é
+  "corrigir o valor digitado não conta duas vezes na média" — não apague.
+- **`Pago.prevPrice`** existe porque item criado à mão pode ter preço sem nunca
+  ter entrado na base; sem ele, apagar o campo zerava esse preço.
+- **`pagos` é por mês**, chave `pago:AAAA-MM`, mesma chave por slug das
+  marcações, e entra no backup como campo opcional.
+- **Nenhum campo abaixo de 16px** em `src/app.css`: o Safari do iOS dá zoom no
+  campo em foco e o layout pula.
+- O passo da nota continua sendo o índice 1. O `Steps.svelte` só o omite do nav,
+  pra não renumerar todo `go(n)`.
+
 ## Fase 3 — sincronizar entre aparelhos (proposta antes de código)
 
 Duas pessoas, uma lista, os mesmos check-marks. Restrições dadas:
