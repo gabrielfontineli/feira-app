@@ -42,6 +42,8 @@ Isto vale mais que qualquer preferência de estilo:
 npm run dev            # http://localhost:5173
 npm run build && npm run preview
 npm run check          # svelte-check, tem que ficar limpo
+npm test               # vitest, unidade sobre src/lib/*.ts
+npm run test:watch     # o mesmo, em watch
 npm run check:parity   # as contas continuam iguais às do feira-app.html
 node tools/smoke.mjs   # ponta a ponta no Chrome real (precisa do preview no ar)
 npm run deploy         # build + push do dist/ pra branch gh-pages
@@ -67,98 +69,65 @@ O repositório não contém dado pessoal, e é assim que fica.
 
 Antes de qualquer push, vale varrer: `git grep -nE '\b(nome|2200)\b'`.
 
-## Estado: fase 1 concluída
+## Estado: fase 2 concluída
 
-Reescrita do `feira-app.html` (919 linhas, vanilla, arquivo único) como PWA
-Svelte, **sem mudar uma conta**. Instalável, funciona offline a frio, fontes
-próprias, service worker com fluxo de atualização por aviso. Lighthouse PWA
-1.0. `feira-app.html` fica no repo como referência de comparação.
+**Fase 1** reescreveu o `feira-app.html` (919 linhas, vanilla, arquivo único)
+como PWA Svelte, **sem mudar uma conta**. Instalável, funciona offline a frio,
+fontes próprias, service worker com fluxo de atualização por aviso. Lighthouse
+PWA 1.0. `feira-app.html` fica no repo como referência de comparação.
 
-## Fase 2 — parser e dicionário testáveis (próxima)
+**Fase 2** fechou os onze defeitos de conta, um commit por defeito, cada um com
+teste falhando antes. 67 testes em `src/lib/*.test.ts`.
 
-O objetivo é fechar os defeitos abaixo, **cada um com teste falhando antes**.
-A fase 1 portou a aritmética byte a byte de propósito, defeitos incluídos, pra
-que o diff da reescrita fosse revisável contra os números antigos. Agora dá pra
-mexer.
+`npm run check:parity` continua passando: nada na fase 2 mudou a aritmética do
+dataset de exemplo, então a comparação com o app antigo segue valendo como
+auditoria. Se um dia um número do exemplo mudar de propósito, o valor antigo e o
+defeito que causou a mudança vão no comentário — não apague a asserção.
 
-### Entregas
+### Como a fase 2 ficou
 
-1. **Testes unitários** (`vitest` ou `node:test` — o que exigir menos
-   configuração) sobre `parseNF.ts`, `prices.ts` e `quantity.ts`.
-2. **Fixtures de pelo menos 3 layouts reais de nota**, cobrindo:
-   - linhas por peso (`0,594 KG`);
-   - itens repetidos que precisam agregar;
-   - linhas de cabeçalho, total e pagamento que precisam ser ignoradas;
-   - decimais pt-BR do tipo `1.052,80`.
-3. **Fallback difuso** (sobreposição de tokens ou trigrama) pras descrições que
-   não casam com o dicionário, no lugar da heurística de "três primeiras
-   palavras" do `prettify`. Casamento de baixa confiança tem que **aparecer pro
-   usuário confirmar**, não entrar calado na base de preço.
-4. **Extrair parser e dicionário como módulos próprios** com fronteira clara —
-   hoje `parseNF.ts` importa `DIC` direto, o que amarra os dois.
+Módulos, com fronteira: `parseNF.ts` lê colunas e não conhece o dicionário;
+`match.ts` decide de que produto a linha fala e não conhece o formato da nota;
+`dic.ts` é só dado; `checks.ts` é a chave de marcação; `prices.ts` faz a conta
+de preço.
 
-### Defeitos a corrigir, pior primeiro
+Decisões que valem saber antes de mexer:
 
-**Preço / parser**
+- **`toNum`** decide o decimal pelo último separador do token. `1.052` vale
+  1,052 e não 1052 — aceitável porque os campos lidos da nota são quantidade e
+  preço unitário, onde valor acima de mil não existe. Também é estrito: `1KG`
+  vira NaN, não 1.
+- **Média de preço é EWMA com α = 0,3**, uma observação por nota, e cada entrada
+  guarda `lastSeen`. `n` sobrevive só pra ler base antiga.
+- **Unidade incompatível não entra na média.** A comparação é peso versus peça,
+  não literal: 'bandeja' contra 'cx' não é conflito, 'kg' contra 'un' é. Volta
+  em `conflitos` e a tela avisa.
+- **Casamento difuso é trigrama (Dice) em janela de palavras**, limite 0,55, e
+  **nunca entra na base sem confirmação** — vira `pendentes` e a tela pergunta.
+  O `prettify` sobrou só pra nomear produto de fato novo, que é o que ele sabe
+  fazer.
+- **`DIC.pp` virou `DIC.pp2`**: é quantidade mensal pra 2 pessoas, e o nome
+  antigo sugeria por pessoa.
+- **Perda ao cozinhar é por item**, caindo em `cfg.loss`. Override só onde o
+  rendimento real difere dos 25% padrão (peixe 18, moída 30). O limite de 90%
+  mora dentro de `rawQty`, não na borda do formulário.
+- **`qty` continua mensal.** A lista mostra `qty ÷ idas` por ida, e as idas saem
+  de `freq` + `cfg.dias` (semana = dias/7, quinzena = dias/15), sem campo novo.
+- **Marcação de compra é chaveada por slug do nome**, não por `id`. Mesmo
+  algoritmo de `tools/gerador-to-backup.mjs`. Renomear um item leva as marcações
+  dele junto, e dois itens de mesmo nome dividem marcação: aceito e escrito em
+  `checks.ts`.
 
-1. `src/lib/parseNF.ts:36` — `findIndex` pega o **primeiro** token que casa com
-   `UNITS`. Na nota separada por espaço simples (linha 35), uma palavra da
-   descrição ganha: `ARROZ BRANCO T1 PC 1KG 2,0 UN 5,29` casa em `PC`, a
-   descrição vira `ARROZ BRANCO`, `qty` lê `T1` → NaN → 1, e o preço unitário lê
-   `1KG` → **1,00**. Um arroz de R$ 1,00 aprendido em silêncio. Correção:
-   varrer da direita pra esquerda e exigir vizinhos numéricos.
-2. `src/lib/format.ts:4` — `toNum` remove todo `.`, então `1.052,80` → 1052.80
-   (certo) mas `25.49` → **2549**. Qualquer nota com decimal por ponto envenena
-   a base. Correção: decidir o separador pelo último que aparece no token.
-3. `src/lib/prices.ts:49` — a média corrida nunca envelhece e `n` cresce sem
-   limite. Depois de 20 notas, um preço novo entra com peso 1/20, e um aumento
-   real leva meses pra chegar no número que você usa pra orçar. Correção: EWMA
-   (α ≈ 0,3) ou janela limitada, mais um `lastSeen` pra sinalizar preço velho.
-4. `src/lib/prices.ts:34,49` — o recálculo ignora a unidade. `Queijo coalho`
-   registrado uma vez a R$ 42,49/kg e outra a R$ 17,00/un vira uma média sem
-   significado. Correção: chavear a base por `nome + unidade`, ou recusar
-   mistura de unidades.
-5. `src/lib/prices.ts:35` — dentro de uma nota só, `agg[name].sum += r.unitPrice`
-   faz média **sem ponderar pela quantidade**: 0,5 kg a 40 e 2 kg a 44 dá 42, e
-   não 43,20.
+### O que ficou aberto de propósito
 
-**Quantidade / perda ao cozinhar**
-
-6. `src/lib/steps/List.svelte`, com o rótulo vindo de `FREQ` em
-   `src/lib/dic.ts:91` — item com `freq: 'semana'` mostra a quantidade **do
-   mês** embaixo de um cabeçalho que diz "toda semana". A banana do exemplo é 5 kg, então a lista lê como 5 kg por
-   ida ao mercado — 4× o orçado. `qty` é mensal, isso está decidido. Correção:
-   mostrar `qty ÷ idas` por ida, com o número do mês como nota.
-7. `src/lib/quantity.ts:9` — `sugQty` divide por 2 (`cfg.pessoas / 2`), então
-   `DIC.pp` é quantidade mensal **por casal**, não por pessoa como o nome
-   sugere. Correção: renomear o campo ou dividir os valores por 2. Código e
-   documentação têm que concordar.
-8. `src/lib/quantity.ts:19` — uma única `cfg.loss` global pra todo item que
-   "cozinha e reduz". A conversão `qty / (1 - perda)` está certa, mas os
-   rendimentos reais divergem (peito de frango ~25%, peixe ~15-20%, carne moída
-   ~30%) e arroz **ganha** peso. Correção: override por item, caindo em
-   `cfg.loss` como padrão.
-9. `src/lib/quantity.ts:20` — `loss = 100` faz `f = 0` e a função devolve a
-   quantidade cozida em silêncio. `toCfg` já limita a 90 na importação
-   (`state.svelte.ts:34`), mas o `max="90"` do input é só validação de
-   formulário: digitar 100 na tela passa. Correção: limitar no cálculo, não na
-   borda.
-10. `src/lib/steps/ItemCard.svelte` — o campo se chama `Qtd/mês` sem dizer que é
-    peso **cozido** quando `cook` está ligado, enquanto a lista final fala "peso
-    cru". Um número, dois significados, nada na tela diz qual. Conferir também a
-    intenção do exemplo: `Filé de frango` 4 kg com `cook` ligado hoje manda
-    comprar 5,3 kg.
-
-**Integridade de dado**
-
-11. `src/lib/format.ts:13` + `src/lib/quantity.ts` — `checks` é chaveado por
-    `nid()`, id aleatório regerado a cada re-seed ou reimportação, então
-    recarregar o template órfã toda marcação de compra. Já resolvido **só** pro
-    backup gerado por `tools/gerador-to-backup.mjs`, que usa slug do nome.
-    Correção geral: chavear por slug estável do nome do item.
-
-Fechados na fase 1: exportação levava só o mês aberto (`64d34b7`); `cfg`
-importado sem validação, que espalhava NaN pelas quantidades (`toCfg`).
+- O exemplo mantém a perda global nos itens que cozinham. Aquelas quantidades
+  são a lista real de uma casa, e sobrescrever seria adivinhar pelo usuário.
+  Vale conferir com quem usa: `Filé de frango` 4 kg com `cook` ligado manda
+  comprar 5,3 kg — a intenção era 4 kg cru ou 4 kg cozido?
+- `matchDic` ainda casa pela primeira palavra-chave que aparece na descrição, e
+  a ordem do `DIC` decide empate. 'CREME DE LEITE' casa em `leite`. Não é
+  regressão, é o comportamento de sempre, e o casamento difuso não ajuda porque
+  o literal ganha antes.
 
 ## Fase 3 — sincronizar entre aparelhos (proposta antes de código)
 
