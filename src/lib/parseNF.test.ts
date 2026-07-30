@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NF_ESPACOS, NF_TAB } from './nf.fixtures';
+import { NF_ESPACO_SIMPLES, NF_ESPACOS, NF_TAB } from './nf.fixtures';
 import { matchDic, parseNF } from './parseNF';
 
 describe('parseNF · nota separada por tabulação', () => {
@@ -45,6 +45,48 @@ describe('parseNF · nota alinhada com espaços', () => {
 
   it('mantém as duas linhas do mesmo item, pra agregação depois', () => {
     expect(rows.filter((r) => r.desc.startsWith('TOMATE'))).toHaveLength(2);
+  });
+});
+
+describe('parseNF · nota colapsada em espaço simples', () => {
+  const { rows, skipped } = parseNF(NF_ESPACO_SIMPLES);
+
+  it('não deixa palavra da descrição virar a coluna de unidade', () => {
+    // Defeito 1: 'PC' no meio da descrição ganhava a busca, a descrição virava
+    // 'ARROZ BRANCO', a quantidade lia 'T1' e o preço lia '1KG' -> R$ 1,00.
+    expect(rows[0]).toEqual({
+      desc: 'ARROZ BRANCO T1 PC 1KG',
+      qty: 2,
+      unit: 'un',
+      unitPrice: 5.29,
+    });
+  });
+
+  it('lê preço com ponto decimal', () => {
+    expect(rows[1]).toEqual({
+      desc: 'FILE PEITO FGO SADIA BD 1KG',
+      qty: 1,
+      unit: 'un',
+      unitPrice: 25.49,
+    });
+  });
+
+  it('ignora unidade grudada em número dentro da descrição', () => {
+    expect(rows[2]).toEqual({
+      desc: 'OVO BRANCO GRANDE PC 30UN',
+      qty: 1,
+      unit: 'cx',
+      unitPrice: 22.9,
+    });
+  });
+
+  it('escolhe a unidade da direita quando a descrição repete a palavra', () => {
+    expect(rows[3]).toEqual({ desc: 'BANANA PRATA KG', qty: 0.594, unit: 'kg', unitPrice: 5.99 });
+  });
+
+  it('ignora total e CNPJ', () => {
+    expect(rows).toHaveLength(4);
+    expect(skipped).toHaveLength(2);
   });
 });
 

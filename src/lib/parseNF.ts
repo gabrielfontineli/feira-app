@@ -14,12 +14,29 @@ export interface ParseResult {
 }
 
 /**
+ * Acha a coluna de unidade: o token mais à direita que é unidade e tem número
+ * dos dois lados (quantidade à esquerda, preço unitário à direita).
+ *
+ * Da direita pra esquerda porque 'PC', 'CX' e 'KG' também aparecem no meio da
+ * descrição — `ARROZ BRANCO T1 PC 1KG 2,0 UN 5,29` tem duas unidades, e a que
+ * abre a coluna de números é sempre a última. Devolve -1 quando não há coluna.
+ */
+function unitIndex(t: string[]): number {
+  for (let i = t.length - 2; i >= 1; i--) {
+    if (!UNITS.test(t[i])) continue;
+    if (isNaN(toNum(t[i - 1])) || isNaN(toNum(t[i + 1]))) continue;
+    return i;
+  }
+  return -1;
+}
+
+/**
  * Lê o texto tabelado de uma nota fiscal brasileira:
  * item · descrição · qtde · unid · vl. unid · desconto · vl. total
  *
- * Portado sem mudança de feira-app.html:539-556 — inclusive os defeitos
- * conhecidos (a busca de unidade pega o primeiro token que casa, e toNum
- * não distingue decimal com ponto). Corrigidos na fase 2, com teste antes.
+ * Estrutura portada de feira-app.html:539-556. A busca da coluna de unidade
+ * foi corrigida na fase 2 (defeito 1): antes pegava o primeiro token que
+ * casava com UNITS, o que quebrava toda nota separada por espaço simples.
  */
 export function parseNF(text: string): ParseResult {
   const out: NFRow[] = [];
@@ -33,8 +50,8 @@ export function parseNF(text: string): ParseResult {
     }
     let t = line.split(/\t+|\s{2,}/).map((s) => s.trim()).filter(Boolean);
     if (t.length < 4) t = line.split(/\s+/);
-    const ui = t.findIndex((x) => UNITS.test(x));
-    if (ui < 1) {
+    const ui = unitIndex(t);
+    if (ui < 0) {
       skipped.push(line);
       return;
     }
@@ -42,11 +59,13 @@ export function parseNF(text: string): ParseResult {
     const desc = t.slice(start, ui - 1).join(' ').replace(/\s*\.$/, '').trim();
     const qty = toNum(t[ui - 1]);
     const unitPrice = toNum(t[ui + 1]);
-    if (!desc || isNaN(unitPrice) || unitPrice <= 0) {
+    if (!desc || unitPrice <= 0) {
       skipped.push(line);
       return;
     }
-    out.push({ desc, qty: isNaN(qty) ? 1 : qty, unit: t[ui].toLowerCase(), unitPrice });
+    // Linha de brinde ou ajuste vem com quantidade zero: conta como uma, senão
+    // a média ponderada da nota perde a linha inteira.
+    out.push({ desc, qty: qty > 0 ? qty : 1, unit: t[ui].toLowerCase(), unitPrice });
   });
   return { rows: out, skipped };
 }
