@@ -1,5 +1,5 @@
 import { prettify } from './format';
-import { matchDic } from './match';
+import { resolve } from './match';
 import type { DicEntry, NFRow, PriceBase, PriceEntry } from './types';
 
 /**
@@ -28,6 +28,28 @@ export interface PriceConflict {
   unitAtual: string | null;
 }
 
+/**
+ * Casamento por semelhança à espera de confirmação. Não entrou na base: um
+ * palpite errado aqui estraga o preço de outro item, e é o usuário que sabe se
+ * 'FILE DE FRAGO SADIA' é o filé de frango dele.
+ */
+export interface PendingMatch {
+  /** Descrição como veio na nota. */
+  desc: string;
+  /** Nome sugerido pelo dicionário. */
+  name: string;
+  entry: DicEntry;
+  /** Palavra-chave que casou — explica a sugestão. */
+  chave: string;
+  /** 0 a 1. */
+  score: number;
+  /** Preço observado nesta nota, já ponderado pela quantidade. */
+  price: number;
+  unit: string;
+  /** Nome usado se você recusar a sugestão e guardar separado. */
+  nameAlt: string;
+}
+
 export interface LearnResult {
   base: PriceBase;
   /** Nomes que ainda não tinham preço. */
@@ -37,6 +59,8 @@ export interface LearnResult {
   learned: LearnedPrice[];
   /** Nada foi aprendido destes: precisam de confirmação na tela. */
   conflitos: PriceConflict[];
+  /** Casou só por semelhança: pergunte antes de guardar. */
+  pendentes: PendingMatch[];
 }
 
 /**
@@ -77,59 +101,126 @@ export function isStale(e: PriceEntry, ref = hoje()): boolean {
  * Linha cuja unidade é incompatível com a guardada não entra em conta nenhuma:
  * volta em `conflitos` pra confirmação na tela (defeito 4).
  */
+type Agg = {
+  val: number;
+  qty: number;
+  e: DicEntry | null;
+  units: Set<string>;
+  unit: string;
+  /** Só nos pendentes: a descrição e o porquê da sugestão. */
+  desc?: string;
+  chave?: string;
+  score?: number;
+};
+
+/** Soma uma linha na agregação daquele nome, ponderando pela quantidade. */
+function acc(agg: Record<string, Agg>, key: string, r: NFRow, e: DicEntry | null): Agg {
+  const un = bucket(r.unit);
+  if (!agg[key]) agg[key] = { val: 0, qty: 0, e, units: new Set(), unit: r.unit };
+  const a = agg[key];
+  a.val += r.unitPrice * r.qty;
+  a.qty += r.qty;
+  a.units.add(un);
+  // A unidade guardada é a do dicionário, exceto quando a nota discorda da
+  // natureza dela: aí vale o que a nota diz.
+  a.unit = e && bucket(e.u) === un ? e.u : r.unit;
+  return a;
+}
+
+/** Preço observado da agregação, ou NaN quando não há o que aprender. */
+const observado = (a: Agg): number => (a.qty > 0 ? a.val / a.qty : NaN);
+
+/**
+ * Guarda um preço observado sob um nome. Devolve o conflito de unidade em vez
+ * de aplicar, quando a unidade não bate com a que já está lá.
+ */
+export function mergePrice(
+  base: PriceBase,
+  name: string,
+  obs: number,
+  unit: string,
+  ref = hoje(),
+): { base: PriceBase; novo: boolean; conflito: PriceConflict | null } {
+  if (!Number.isFinite(obs) || obs <= 0) return { base, novo: false, conflito: null };
+  const cur = base[name];
+  if (cur && bucket(cur.unit) !== bucket(unit)) {
+    return { base, novo: false, conflito: { name, unit, price: obs, unitAtual: cur.unit } };
+  }
+  const entry: PriceEntry = cur
+    ? { ...cur, price: cur.price + ALPHA * (obs - cur.price), n: cur.n + 1, lastSeen: ref }
+    : { price: obs, unit, n: 1, lastSeen: ref };
+  return { base: { ...base, [name]: entry }, novo: !cur, conflito: null };
+}
+
 export function learnPrices(base: PriceBase, rows: NFRow[], ref = hoje()): LearnResult {
-  type Agg = { val: number; qty: number; e: DicEntry | null; units: Set<string>; unit: string };
   const agg: Record<string, Agg> = {};
+  const dif: Record<string, Agg> = {};
 
   for (const r of rows) {
-    const e = matchDic(r.desc);
-    const name = e ? e.n : prettify(r.desc);
-    const un = bucket(r.unit);
-    if (!agg[name]) agg[name] = { val: 0, qty: 0, e, units: new Set(), unit: r.unit };
-    const a = agg[name];
-    a.val += r.unitPrice * r.qty;
-    a.qty += r.qty;
-    a.units.add(un);
-    // A unidade guardada é a do dicionário, exceto quando a nota discorda da
-    // natureza dela: aí vale o que a nota diz.
-    a.unit = e && bucket(e.u) === un ? e.u : r.unit;
+    const res = resolve(r.desc);
+    if (res.conf === 'difusa' && res.entry) {
+      const a = acc(dif, res.name, r, res.entry);
+      a.desc = a.desc || r.desc;
+      a.chave = res.chave;
+      a.score = res.score;
+    } else {
+      acc(agg, res.name, r, res.entry);
+    }
   }
 
-  const next: PriceBase = { ...base };
+  let next: PriceBase = { ...base };
   const learned: LearnedPrice[] = [];
   const conflitos: PriceConflict[] = [];
   let novos = 0;
   let recal = 0;
 
   for (const [name, a] of Object.entries(agg)) {
-    const obs = a.qty > 0 ? a.val / a.qty : NaN;
+    const obs = observado(a);
     if (!Number.isFinite(obs) || obs <= 0) continue;
-
-    const cur = next[name];
     // A própria nota traz o item por peso e por peça: não há o que aprender.
     if (a.units.size > 1) {
       conflitos.push({ name, unit: a.unit, price: obs, unitAtual: null });
       continue;
     }
-    if (cur && bucket(cur.unit) !== bucket(a.unit)) {
-      conflitos.push({ name, unit: a.unit, price: obs, unitAtual: cur.unit });
+    const m = mergePrice(next, name, obs, a.unit, ref);
+    if (m.conflito) {
+      conflitos.push(m.conflito);
       continue;
     }
-
-    if (cur) {
-      next[name] = {
-        ...cur,
-        price: cur.price + ALPHA * (obs - cur.price),
-        n: cur.n + 1,
-        lastSeen: ref,
-      };
-      recal++;
-    } else {
-      next[name] = { price: obs, unit: a.unit, n: 1, lastSeen: ref };
-      novos++;
-    }
+    next = m.base;
+    if (m.novo) novos++;
+    else recal++;
     learned.push({ name, entry: a.e, price: next[name].price });
   }
 
-  return { base: next, novos, recal, learned, conflitos };
+  const pendentes: PendingMatch[] = [];
+  for (const [name, a] of Object.entries(dif)) {
+    const obs = observado(a);
+    if (!Number.isFinite(obs) || obs <= 0 || !a.e || !a.desc) continue;
+    pendentes.push({
+      desc: a.desc,
+      name,
+      entry: a.e,
+      chave: a.chave || '',
+      score: a.score || 0,
+      price: obs,
+      unit: a.unit,
+      nameAlt: prettify(a.desc),
+    });
+  }
+
+  return { base: next, novos, recal, learned, conflitos, pendentes };
+}
+
+/**
+ * Aplica um casamento difuso depois de o usuário confirmar. `name` permite
+ * recusar a sugestão e guardar sob o nome próprio da descrição (`nameAlt`).
+ */
+export function aceitarPendente(
+  base: PriceBase,
+  p: PendingMatch,
+  name = p.name,
+  ref = hoje(),
+): { base: PriceBase; novo: boolean; conflito: PriceConflict | null } {
+  return mergePrice(base, name, p.price, p.unit, ref);
 }

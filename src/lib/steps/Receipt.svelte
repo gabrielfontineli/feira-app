@@ -1,9 +1,17 @@
 <script lang="ts">
   import { brl2, norm } from '../format';
   import { parseNF } from '../parseNF';
-  import { learnPrices, type PriceConflict } from '../prices';
+  import {
+    aceitarPendente,
+    isStale,
+    learnPrices,
+    STALE_DIAS,
+    type PendingMatch,
+    type PriceConflict,
+  } from '../prices';
   import { allowed, itemFromDic } from '../quantity';
   import { feira } from '../state.svelte';
+  import { toast } from '../toaster.svelte';
 
   let { go }: { go: (i: number) => void } = $props();
 
@@ -11,6 +19,7 @@
   let error = $state('');
   let result = $state<{ lidas: number; novos: number; recal: number; add: number; ignoradas: number } | null>(null);
   let conflitos = $state<PriceConflict[]>([]);
+  let pendentes = $state<PendingMatch[]>([]);
 
   const placeholder =
     '001\tFILE PEITO FGO SADIA BD 1KG\t1,0\tUN\t25,49\t0,00\t25,49\n' +
@@ -20,6 +29,7 @@
     error = '';
     result = null;
     conflitos = [];
+    pendentes = [];
     if (!text.trim()) {
       error = 'Cole o texto da nota primeiro.';
       return;
@@ -32,25 +42,43 @@
     }
 
     const lp = learnPrices(feira.base, rows);
-    const { base, novos, recal, learned } = lp;
-    feira.base = base;
+    feira.base = lp.base;
     conflitos = lp.conflitos;
+    pendentes = lp.pendentes;
 
     let add = 0;
-    for (const { name, entry } of learned) {
-      const it = feira.itens.find((x) => norm(x.name) === norm(name));
-      if (it) {
-        it.price = Math.round(base[name].price * 100) / 100;
-        continue;
-      }
-      if (entry && allowed(entry, feira.cfg)) {
-        feira.itens.push(itemFromDic(entry, feira.cfg, base));
-        add++;
-      }
-    }
+    for (const { name, entry } of lp.learned) add += aplicar(name, entry);
 
     feira.cfg.started = 1;
-    result = { lidas: rows.length, novos, recal, add, ignoradas: skipped.length };
+    result = { lidas: rows.length, novos: lp.novos, recal: lp.recal, add, ignoradas: skipped.length };
+  }
+
+  /** Leva o preço aprendido pro item da lista, criando o item se não existir. */
+  function aplicar(name: string, entry: PendingMatch['entry'] | null): number {
+    const it = feira.itens.find((x) => norm(x.name) === norm(name));
+    if (it) {
+      it.price = Math.round(feira.base[name].price * 100) / 100;
+      return 0;
+    }
+    if (entry && allowed(entry, feira.cfg)) {
+      feira.itens.push(itemFromDic(entry, feira.cfg, feira.base));
+      return 1;
+    }
+    return 0;
+  }
+
+  /** Confirma um casamento difuso: `name` é o sugerido ou o nome próprio. */
+  function confirmar(p: PendingMatch, name: string) {
+    const r = aceitarPendente(feira.base, p, name);
+    pendentes = pendentes.filter((x) => x !== p);
+    if (r.conflito) {
+      conflitos = [...conflitos, r.conflito];
+      return;
+    }
+    feira.base = r.base;
+    aplicar(name, name === p.name ? p.entry : null);
+    if (result) result[r.novo ? 'novos' : 'recal']++;
+    toast.show(name + ': R$ ' + brl2(feira.base[name].price));
   }
 </script>
 
@@ -81,6 +109,30 @@
       <span style="color:var(--muted)">({result.ignoradas} linhas ignoradas)</span>
     {/if}
   </div>
+  {#if pendentes.length}
+    <div class="hintbox">
+      <b>Isto é o mesmo item?</b> Não guardei o preço destas linhas porque a descrição
+      só se parece com o que está no dicionário. Um palpite errado aqui estraga o
+      preço de outro item.
+    </div>
+    {#each pendentes as p (p.desc)}
+      <div class="pend">
+        <div class="small"><b>{p.desc}</b> · R$ {brl2(p.price)} / {p.unit}</div>
+        <div class="btnrow" style="margin-top:7px">
+          <button class="btn primary" onclick={() => confirmar(p, p.name)}>
+            É {p.name}
+          </button>
+          <button class="btn ghost" onclick={() => confirmar(p, p.nameAlt)}>
+            Guardar como “{p.nameAlt}”
+          </button>
+          <button class="btn ghost" onclick={() => (pendentes = pendentes.filter((x) => x !== p))}>
+            Ignorar
+          </button>
+        </div>
+      </div>
+    {/each}
+  {/if}
+
   {#if conflitos.length}
     <div class="warnbox">
       <b>Unidade não bate, preço não foi aprendido.</b>
@@ -98,10 +150,23 @@
   <h3>preços na memória</h3>
   <div>
     {#each Object.entries(feira.base) as [name, entry] (name)}
-      <span class="chip">{name} · R$ {brl2(entry.price)}</span>
+      <span class="chip">
+        {name} · R$ {brl2(entry.price)}
+        <!-- Preço que não aparece em nota há muito tempo não serve pra orçar. -->
+        {#if isStale(entry)}<span class="velho" title="sem nota há mais de {STALE_DIAS} dias">
+            · antigo
+          </span>{/if}
+      </span>
     {/each}
   </div>
   <div class="btnrow">
     <button class="btn primary" onclick={() => go(2)}>Continuar →</button>
   </div>
 {/if}
+
+<style>
+  .pend{border:1px solid var(--line);border-left:3px solid var(--coral);border-radius:12px;
+    padding:11px 13px;margin:8px 0;background:var(--card)}
+  .pend .btnrow{margin-bottom:0}
+  .velho{color:var(--coral)}
+</style>

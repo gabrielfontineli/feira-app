@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { learnPrices } from './prices';
+import { aceitarPendente, learnPrices } from './prices';
 import type { NFRow, PriceBase } from './types';
 
 const HOJE = '2026-07-30';
@@ -97,5 +97,81 @@ describe('learnPrices · mistura de unidade', () => {
   it('guarda a unidade da nota quando ela contradiz o dicionário', () => {
     const { base } = learnPrices({}, [row('QUEIJO COALHO', 1, 'un', 17)], HOJE);
     expect(base['Queijo coalho'].unit).toBe('un');
+  });
+});
+
+describe('learnPrices · casamento difuso', () => {
+  it('não guarda preço de casamento só parecido', () => {
+    // Entrega 3: casamento de baixa confiança tem que aparecer pro usuário
+    // confirmar, não entrar calado na base de preço.
+    const { base, pendentes, novos } = learnPrices(
+      {},
+      [row('FILE DE FRAGO SADIA BD 1KG', 1, 'un', 25.49)],
+      HOJE,
+    );
+    expect(base).toEqual({});
+    expect(novos).toBe(0);
+    expect(pendentes).toHaveLength(1);
+    expect(pendentes[0]).toMatchObject({
+      desc: 'FILE DE FRAGO SADIA BD 1KG',
+      name: 'Filé de frango',
+      chave: 'file de frango',
+      price: 25.49,
+      nameAlt: 'File de frago',
+    });
+  });
+
+  it('pondera as linhas do pendente pela quantidade, como as outras', () => {
+    const { pendentes } = learnPrices(
+      {},
+      [row('MUSARELA FATIADA', 0.5, 'kg', 40), row('MUSARELA FATIADA', 2, 'kg', 44)],
+      HOJE,
+    );
+    expect(pendentes).toHaveLength(1);
+    expect(pendentes[0].price).toBeCloseTo(43.2, 6);
+  });
+
+  it('casamento literal segue entrando direto', () => {
+    const { base, pendentes } = learnPrices({}, [row('FILE PEITO FGO SADIA', 1, 'un', 25.49)], HOJE);
+    expect(pendentes).toHaveLength(0);
+    expect(base['Filé de frango'].price).toBe(25.49);
+  });
+
+  it('produto desconhecido entra sob o nome próprio, sem perguntar', () => {
+    const { base, pendentes } = learnPrices({}, [row('PILHA AA DURACELL', 2, 'un', 18.9)], HOJE);
+    expect(pendentes).toHaveLength(0);
+    expect(base['Pilha aa duracell'].price).toBe(18.9);
+  });
+});
+
+describe('aceitarPendente', () => {
+  const pendente = () => learnPrices({}, [row('FILE DE FRAGO SADIA', 1, 'un', 25.49)], HOJE).pendentes[0];
+
+  it('confirmado, o preço entra no nome sugerido', () => {
+    const { base, novo } = aceitarPendente({}, pendente(), undefined, HOJE);
+    expect(novo).toBe(true);
+    expect(base['Filé de frango']).toEqual({ price: 25.49, unit: 'un', n: 1, lastSeen: HOJE });
+  });
+
+  it('recusado, o preço pode ir pro nome próprio da descrição', () => {
+    const p = pendente();
+    const { base } = aceitarPendente({}, p, p.nameAlt, HOJE);
+    expect(base[p.nameAlt].price).toBe(25.49);
+    expect(p.nameAlt).toBe('File de frago');
+    expect(base['Filé de frango']).toBeUndefined();
+  });
+
+  it('recalibra por EWMA quando o nome já tem preço', () => {
+    const base = { 'Filé de frango': { price: 20, unit: 'un', n: 4 } };
+    const r = aceitarPendente(base, pendente(), undefined, HOJE);
+    expect(r.novo).toBe(false);
+    expect(r.base['Filé de frango'].price).toBeCloseTo(20 + 0.3 * (25.49 - 20), 6);
+  });
+
+  it('ainda recusa mistura de unidade', () => {
+    const base = { 'Filé de frango': { price: 25, unit: 'kg', n: 2 } };
+    const r = aceitarPendente(base, pendente(), undefined, HOJE);
+    expect(r.conflito).toMatchObject({ unitAtual: 'kg', unit: 'un' });
+    expect(r.base['Filé de frango'].price).toBe(25);
   });
 });
