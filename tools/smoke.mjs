@@ -140,6 +140,30 @@ try {
   })()`);
   check('digitar o preço ao riscar o item', preco === '9,90', preco);
 
+  // Adicionar pelo dicionário: um toque tem que produzir item completo.
+  const novo = await evaluate(`(async () => {
+    document.querySelector('.summary details.add').open = true;
+    const el = document.querySelector('.summary details.add input');
+    el.value = 'pepino';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 120));
+    const linha = document.querySelector('.summary details.add li');
+    if (!linha) return 'sem sugestao';
+    const resumo = linha.querySelector('.txt span').textContent.trim();
+    const hoje = [...linha.querySelectorAll('button')].find(b => b.textContent.trim() === 'hoje');
+    if (!hoje) return 'sem botao hoje: ' + [...linha.querySelectorAll('button')].map(b=>b.textContent.trim()).join('|') + ' / ' + resumo;
+    hoje.click();
+    await new Promise(r => setTimeout(r, 200));
+    return resumo;
+  })()`);
+  check('sugestão traz categoria, unidade e frequência', novo.startsWith('Verduras e legumes · '), novo);
+
+  const avulso = await evaluate(
+    `[...document.querySelectorAll('.item .lbl')].filter(e=>e.textContent.includes('Pepino')).length
+     + '/' + document.querySelectorAll('.item .qty em.avulso').length`,
+  );
+  check('item entra na lista marcado como avulso da ida', avulso === '1/1', avulso);
+
   const persisted = await evaluate(
     `Object.keys(localStorage).filter(k=>k.startsWith('feira:')).sort().join(',')`,
   );

@@ -66,6 +66,8 @@ class Feira {
 
   readonly key = $derived(monthKey(CHECK, this.ym.y, this.ym.m));
   readonly keyPago = $derived(monthKey(PAGO, this.ym.y, this.ym.m));
+  /** Mês aberto como 'AAAA-MM'. É o que prende um avulso — ver `Item.soHoje`. */
+  readonly mes = $derived(this.key.slice(CHECK.length));
 
   async load() {
     const c = await dget<Partial<Cfg>>(K_CFG);
@@ -121,6 +123,17 @@ class Feira {
     const k = checkKey(it);
     this.checks[k] = !this.checks[k];
     void dset(this.key, this.checks);
+  }
+
+  /** Entra na lista. `soHoje` prende o item ao mês aberto e só a ele. */
+  adicionar(it: Item, soHoje = false) {
+    if (soHoje) it.soHoje = this.mes;
+    this.itens.unshift(it);
+  }
+
+  /** Item que a lista deste mês mostra: ligado, e não é avulso de outro mês. */
+  naLista(it: Item): boolean {
+    return it.on && (!it.soHoje || it.soHoje === this.mes);
   }
 
   /**

@@ -13,6 +13,12 @@ export interface Item {
   loss?: number;
   on: boolean;
   nota: string;
+  /**
+   * Avulso de uma ida só, no formato 'AAAA-MM'. A lista mostra o item enquanto
+   * o mês bater; no mês seguinte ele some sozinho, sem varredura nem limpeza.
+   * Vazio: item fixo, aparece todo mês.
+   */
+  soHoje?: string;
 }
 
 export interface Cfg {

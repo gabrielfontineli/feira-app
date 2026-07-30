@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { brl0, nid } from '../format';
+  import AddItem from '../AddItem.svelte';
+  import { brl0, norm } from '../format';
   import { byCategory } from '../group';
   import { itemCost } from '../quantity';
   import { feira } from '../state.svelte';
@@ -7,30 +8,22 @@
 
   let { go }: { go: (i: number) => void } = $props();
 
-  const groups = $derived(byCategory(feira.itens));
-  const on = $derived(feira.itens.filter((i) => i.on));
+  let busca = $state('');
+
+  const achados = $derived(
+    busca.trim()
+      ? feira.itens.filter((i) => norm(i.name).includes(norm(busca).trim()))
+      : feira.itens,
+  );
+  const groups = $derived(byCategory(achados));
+  // `naLista` e não `i.on`: avulso de mês passado não entra no total do mês.
+  const on = $derived(feira.itens.filter((i) => feira.naLista(i)));
   const total = $derived(on.reduce((s, i) => s + itemCost(i, feira.cfg), 0));
   const grande = $derived(
     on.filter((i) => i.freq === 'mes').reduce((s, i) => s + itemCost(i, feira.cfg), 0),
   );
   const reposicao = $derived(total - grande);
   const sobra = $derived(feira.cfg.vale - total);
-
-  function add() {
-    feira.itens.unshift({
-      id: nid(),
-      name: 'Novo item',
-      cat: 'Outros',
-      freq: 'mes',
-      qty: 1,
-      unit: 'un',
-      price: 0,
-      cook: false,
-      on: true,
-      nota: '',
-    });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
 
   function wipe() {
     if (!confirm('Remover todos os itens? Os preços aprendidos continuam salvos.')) return;
@@ -44,8 +37,9 @@
     Mude nome, quantidade, preço e frequência. O interruptor da esquerda tira o item da lista sem apagar.
     <b>Coz.</b> = perde peso ao cozinhar, então o app calcula quanto comprar cru.
   </p>
-  <div class="btnrow" style="margin-top:0">
-    <button class="btn" onclick={add}>+ Adicionar item</button>
+  <AddItem />
+  <input class="busca" type="text" bind:value={busca} placeholder="buscar item…" />
+  <div class="btnrow">
     <button class="btn danger" onclick={wipe}>Limpar itens</button>
   </div>
   <div class="totals">
@@ -62,17 +56,25 @@
   </div>
 </div>
 
-{#if !feira.itens.length}
+{#if !achados.length}
   <div class="panel">
     <p class="small">
-      Nenhum item ainda. Use <b>+ Adicionar item</b>, ou volte e cole uma nota fiscal / a lista da dieta.
+      {#if busca.trim()}
+        Nenhum item com “{busca}”.
+      {:else}
+        Nenhum item ainda. Use <b>+ adicionar item</b>, ou volte e cole a lista da dieta.
+      {/if}
     </p>
   </div>
 {:else}
   {#each groups as [cat, list] (cat)}
     <div class="catlabel">{cat}</div>
     {#each list as item (item.id)}
-      <ItemCard {item} remove={() => (feira.itens = feira.itens.filter((x) => x.id !== item.id))} />
+      <ItemCard
+        {item}
+        aberto={!!busca.trim()}
+        remove={() => (feira.itens = feira.itens.filter((x) => x.id !== item.id))}
+      />
     {/each}
   {/each}
 {/if}
@@ -82,3 +84,7 @@
     <button class="btn primary" onclick={() => go(4)}>Gerar a lista →</button>
   </div>
 </div>
+
+<style>
+  .busca{margin-top:9px}
+</style>

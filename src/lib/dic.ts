@@ -89,9 +89,11 @@ export const DIC: DicEntry[] = [
  {k:['racao','areia higienica','petisco'],n:'Pets',c:'Outros',f:'mes',u:'un',cook:0,pp2:1},
 ];
 
-export const FREQ: Record<Freq, { t: string; h: string }> = {mes:{t:'1x por mês',h:'compra grande'},
-            quinzena:{t:'a cada 15 dias',h:'reposição'},
-            semana:{t:'toda semana',h:'frutas, verduras e fresco'}};
+/* `s` é a etiqueta curta que cabe na linha da lista, onde a frequência deixou
+   de ser seção e virou detalhe do item. */
+export const FREQ: Record<Freq, { t: string; h: string; s: string }> = {mes:{t:'1x por mês',h:'compra grande',s:'mês'},
+            quinzena:{t:'a cada 15 dias',h:'reposição',s:'15d'},
+            semana:{t:'toda semana',h:'frutas, verduras e fresco',s:'sem'}};
 
 export const CATORDER: string[] = ['Proteínas','Laticínios','Grãos e massas','Pães','Frutas','Verduras e legumes','Despensa','Extras','Limpeza','Higiene','Outros'];
 

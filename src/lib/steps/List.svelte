@@ -1,22 +1,23 @@
 <script lang="ts">
+  import AddItem from '../AddItem.svelte';
   import { checkKey } from '../checks';
   import { copyText } from '../clipboard';
-  import { CATORDER, FREQ, MESES } from '../dic';
+  import { FREQ, MESES } from '../dic';
   import { brl0, brl2, toNum } from '../format';
   import { byCategory } from '../group';
   import { idasNoMes, itemCost, qtyPorIda, rawQty } from '../quantity';
   import { feira } from '../state.svelte';
   import { toast } from '../toaster.svelte';
-  import type { Freq, Item } from '../types';
+  import type { Item } from '../types';
 
-  const ORDER: Freq[] = ['mes', 'quinzena', 'semana'];
+  /**
+   * Categoria fechada. Vazio quer dizer aberta: assim categoria nova nasce
+   * aberta sem precisar semear o objeto.
+   */
+  let fechada = $state<Record<string, boolean>>({});
 
-  let open = $state<Record<Freq, boolean>>({ mes: true, quinzena: true, semana: true });
-
-  const on = $derived(feira.itens.filter((i) => i.on));
-  const sections = $derived(
-    ORDER.map((f) => ({ f, list: on.filter((i) => i.freq === f) })).filter((s) => s.list.length),
-  );
+  const on = $derived(feira.itens.filter((i) => feira.naLista(i)));
+  const sections = $derived(byCategory(on));
   const total = $derived(on.reduce((s, i) => s + itemCost(i, feira.cfg), 0));
   const spent = $derived(
     on.filter((i) => feira.isChecked(i)).reduce((s, i) => s + itemCost(i, feira.cfg), 0),
@@ -71,8 +72,8 @@
 
   async function copy() {
     let txt = '🛒 Lista de ' + MESES[feira.ym.m] + ' ' + feira.ym.y + '\n';
-    for (const { f, list } of sections) {
-      txt += '\n— ' + FREQ[f].t.toUpperCase() + ' —\n';
+    for (const [cat, list] of sections) {
+      txt += '\n— ' + cat.toUpperCase() + ' —\n';
       for (const i of list) {
         txt += (feira.isChecked(i) ? '[x] ' : '[ ] ') + i.name + ' · ' + qtyLabel(i) + '\n';
       }
@@ -117,69 +118,77 @@
     {/if}
   </div>
   <div class="pbar"><i style="width:{pct}%"></i></div>
+  <!-- Dentro do bloco grudento: lembrou de algo no corredor, adiciona sem
+       rolar até o topo e sem sair pra tela de itens. -->
+  <div class="addwrap noprint"><AddItem modo="mercado" /></div>
 </div>
 
 {#if !on.length}
   <div class="panel">
     <p class="small">
-      Sua lista está vazia. Vá em <b>itens</b> pra adicionar, ou em <b>início</b> pra carregar um exemplo.
+      Sua lista está vazia. Use <b>+ adicionar item</b> aqui em cima, vá em <b>itens</b>, ou em
+      <b>início</b> pra carregar um exemplo.
     </p>
   </div>
 {:else}
-  {#each sections as { f, list } (f)}
+  {#each sections as [cat, items] (cat)}
     <div class="fsec">
-      <button class="fhead" onclick={() => (open[f] = !open[f])} aria-expanded={open[f]}>
-        <div>
-          <span class="tag">{FREQ[f].t}</span>
-          <h4>{FREQ[f].h}</h4>
-        </div>
-        <span class="cnt">{list.filter((i) => feira.isChecked(i)).length}/{list.length}</span>
+      <button
+        class="fhead"
+        onclick={() => (fechada[cat] = !fechada[cat])}
+        aria-expanded={!fechada[cat]}
+      >
+        <h4>{cat}</h4>
+        <span class="cnt">{items.filter((i) => feira.isChecked(i)).length}/{items.length}</span>
       </button>
-      {#if open[f]}
+      {#if !fechada[cat]}
         <div>
-          {#each byCategory(list) as [cat, items] (cat)}
-            <div class="catlabel" style="margin:12px 0 4px 12px">{cat}</div>
-            {#each items as i (i.id)}
-              <div class="item" class:done={feira.isChecked(i)}>
-                <button
-                  class="tick"
-                  role="checkbox"
-                  aria-checked={feira.isChecked(i)}
-                  onclick={() => feira.toggle(i)}
-                >
-                  <span class="cbx">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M20 6 9 17l-5-5" />
-                    </svg>
+          {#each items as i (i.id)}
+            <div class="item" class:done={feira.isChecked(i)}>
+              <button
+                class="tick"
+                role="checkbox"
+                aria-checked={feira.isChecked(i)}
+                onclick={() => feira.toggle(i)}
+              >
+                <span class="cbx">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                </span>
+                <span class="lbl">
+                  {i.name}
+                  {#if noteLabel(i)}<span class="note">{noteLabel(i)}</span>{/if}
+                </span>
+                <span class="qp">
+                  <span class="qty">
+                    {qtyLabel(i)}
+                    <!-- A frequência saiu de seção e virou detalhe: continua
+                         mandando em quanto levar por ida, mas quem organiza a
+                         tela agora é o corredor do mercado. -->
+                    <em class:avulso={i.soHoje}>{i.soHoje ? 'hoje' : FREQ[i.freq].s}</em>
                   </span>
-                  <span class="lbl">
-                    {i.name}
-                    {#if noteLabel(i)}<span class="note">{noteLabel(i)}</span>{/if}
-                  </span>
-                  <span class="qp">
-                    <span class="qty">{qtyLabel(i)}</span>
-                    {#if i.price}<span class="prc num">{brl0(itemCost(i, feira.cfg))}</span>{/if}
-                  </span>
-                </button>
-                <!-- O campo só nasce depois de marcar: andando pelo mercado a
-                     lista fica limpa, e não vira uma parede de inputs no
-                     celular. Digitar é opcional — o placeholder já mostra o
-                     preço de referência que o orçamento está usando. -->
-                {#if feira.isChecked(i)}
-                  <label class="paid noprint">
-                    <span>R$ / {i.unit}</span>
-                    <input
-                      type="text"
-                      inputmode="decimal"
-                      enterkeyhint="done"
-                      placeholder={brl2(feira.base[i.name]?.price ?? i.price)}
-                      value={pagoDe(i)}
-                      onchange={(e) => registrar(i, e.currentTarget)}
-                    />
-                  </label>
-                {/if}
-              </div>
-            {/each}
+                  {#if i.price}<span class="prc num">{brl0(itemCost(i, feira.cfg))}</span>{/if}
+                </span>
+              </button>
+              <!-- O campo só nasce depois de marcar: andando pelo mercado a
+                   lista fica limpa, e não vira uma parede de inputs no
+                   celular. Digitar é opcional — o placeholder já mostra o
+                   preço de referência que o orçamento está usando. -->
+              {#if feira.isChecked(i)}
+                <label class="paid noprint">
+                  <span>R$ / {i.unit}</span>
+                  <input
+                    type="text"
+                    inputmode="decimal"
+                    enterkeyhint="done"
+                    placeholder={brl2(feira.base[i.name]?.price ?? i.price)}
+                    value={pagoDe(i)}
+                    onchange={(e) => registrar(i, e.currentTarget)}
+                  />
+                </label>
+              {/if}
+            </div>
           {/each}
         </div>
       {/if}
@@ -211,11 +220,15 @@
   .pbar{height:5px;border-radius:99px;background:rgba(255,255,255,.15);overflow:hidden;flex-basis:100%;margin-top:3px}
   .pbar i{display:block;height:100%;background:var(--coral);border-radius:99px;transition:width .3s}
 
+  .addwrap{flex-basis:100%;border-top:1px solid rgba(255,255,255,.15);margin-top:4px}
+  /* O bloco grudento é escuro, então o adicionar precisa das cores dele. */
+  .addwrap :global(.add summary){color:#cfe0d2}
+  .addwrap :global(.add li){border-top-color:rgba(255,255,255,.13)}
+  .addwrap :global(.add .txt span){color:#a9b8ac}
+
   .fsec{border:1px solid var(--line);border-radius:14px;margin:11px 0;overflow:hidden;background:var(--card);box-shadow:var(--shadow)}
-  .fhead{width:100%;font-family:inherit;text-align:left;padding:13px 15px;background:var(--green-soft);border:none;border-bottom:1px solid var(--line);
+  .fhead{width:100%;font-family:inherit;text-align:left;padding:11px 15px;background:var(--green-soft);border:none;border-bottom:1px solid var(--line);
     display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer;user-select:none}
-  .fhead .tag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-    color:#fff;background:var(--green);padding:3px 9px;border-radius:999px;margin-bottom:5px}
   .fhead h4{font-family:'Fraunces',serif;font-weight:600;font-size:17px;margin:0;text-transform:lowercase}
   .fhead .cnt{font-family:'Space Mono',monospace;font-size:12.5px;color:var(--green-deep);flex:none}
 
@@ -231,6 +244,9 @@
   .item .note{display:block;font-size:11px;color:var(--green);font-family:'Space Mono',monospace;margin-top:1px}
   .item .qp{text-align:right;white-space:nowrap}
   .item .qty{font-family:'Space Mono',monospace;font-size:12.5px;color:var(--muted);display:block}
+  .item .qty em{font-style:normal;font-size:10px;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--green-deep);background:var(--green-soft);border-radius:5px;padding:1px 5px;margin-left:5px}
+  .item .qty em.avulso{color:var(--coral);background:var(--coral-soft)}
   .item .prc{font-family:'Space Mono',monospace;font-size:12.5px;color:var(--green-deep);font-weight:700}
   .item.done .lbl,.item.done .qty,.item.done .prc{text-decoration:line-through;color:var(--muted)}
 
