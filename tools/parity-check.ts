@@ -45,7 +45,7 @@ assert.equal(bucket('semana'), 332.24);
 // Peso cru: 4 kg de frango cozido = 5,33 kg cru.
 assert.equal(round(rawQty(on.find((i) => i.name === 'Filé de frango')!, cfg)), 5.333333);
 
-// `pp` é medido pra 2 pessoas: dobra o número de pessoas, dobra a quantidade.
+// `pp2` é medido pra 2 pessoas: dobra o número de pessoas, dobra a quantidade.
 const ovos = matchDic('OVO BRANCO GRANDE')!;
 assert.equal(sugQty(ovos, cfg), 4.5);
 assert.equal(sugQty(ovos, { ...cfg, pessoas: 4 }), 9);

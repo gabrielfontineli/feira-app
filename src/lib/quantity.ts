@@ -2,12 +2,29 @@ import { nid } from './format';
 import type { Cfg, DicEntry, Item, PriceBase } from './types';
 
 /**
- * Quantidade sugerida pro mês. Atenção: `pp` é medido pra 2 pessoas, não por
- * pessoa — daí o `pessoas/2`. Portado de feira-app.html:559.
+ * Teto da perda ao cozinhar. Existe pra `1 - perda` nunca virar zero: com
+ * perda 100 a conta devolvia o peso cozido em silêncio (defeito 9). `toCfg` já
+ * limita o cfg importado, mas o input da tela não é fronteira de confiança.
+ */
+export const LOSS_MAX = 90;
+
+/**
+ * Quantidade sugerida pro mês. `pp2` é medido pra 2 pessoas, daí o `pessoas/2`.
+ * Portado de feira-app.html:559.
  */
 export function sugQty(e: DicEntry, cfg: Cfg): number {
   const f = (cfg.pessoas / 2) * (cfg.dias / 30);
-  return Math.round((e.pp || 1) * f * 100) / 100;
+  return Math.round((e.pp2 || 1) * f * 100) / 100;
+}
+
+/**
+ * Perda ao cozinhar que vale pra este item, em %: a do próprio item quando ela
+ * existe, senão a global. Frango rende ~25%, peixe ~18%, moída ~30% — uma
+ * perda só pra todos errava em algum deles (defeito 8).
+ */
+export function lossOf(it: Item, cfg: Cfg): number {
+  const l = Number.isFinite(it.loss as number) ? (it.loss as number) : cfg.loss;
+  return Math.min(LOSS_MAX, Math.max(0, Number.isFinite(l) ? l : 0));
 }
 
 /**
@@ -16,8 +33,7 @@ export function sugQty(e: DicEntry, cfg: Cfg): number {
  */
 export function rawQty(it: Item, cfg: Cfg): number {
   if (!it.cook) return it.qty;
-  const f = 1 - cfg.loss / 100;
-  return f > 0 ? it.qty / f : it.qty;
+  return it.qty / (1 - lossOf(it, cfg) / 100);
 }
 
 export function itemCost(it: Item, cfg: Cfg): number {
@@ -49,6 +65,7 @@ export function itemFromDic(e: DicEntry, cfg: Cfg, base: PriceBase, nameOverride
     unit: e.u || 'un',
     price: priceOf(base, name),
     cook: !!e.cook,
+    loss: e.loss,
     on: true,
     nota: '',
   };

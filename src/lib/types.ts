@@ -9,6 +9,8 @@ export interface Item {
   unit: string;
   price: number;
   cook: boolean;
+  /** Perda ao cozinhar em %, só deste item. Vazio: usa a `loss` do cfg. */
+  loss?: number;
   on: boolean;
   nota: string;
 }
@@ -46,8 +48,13 @@ export interface DicEntry {
   f: Freq;
   u: string;
   cook: 0 | 1;
-  /** Quantidade por mês pra uma casa de 2 pessoas (ver sugQty). */
-  pp: number;
+  /**
+   * Quantidade por mês pra uma casa de **2 pessoas** — é o `2` do nome, e é o
+   * que `sugQty` divide. Antes chamava `pp`, o que sugeria por pessoa.
+   */
+  pp2: number;
+  /** Perda ao cozinhar em %, quando o rendimento não é o padrão do cfg. */
+  loss?: number;
   grp?: 'limpeza' | 'higiene';
   extra?: 1;
 }
