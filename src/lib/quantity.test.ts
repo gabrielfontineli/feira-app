@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { matchDic } from './parseNF';
-import { itemCost, itemFromDic, LOSS_MAX, rawQty, sugQty } from './quantity';
+import { idasNoMes, itemCost, itemFromDic, LOSS_MAX, qtyPorIda, rawQty, sugQty } from './quantity';
 import type { Cfg, Item } from './types';
 
 const cfg: Cfg = {
@@ -77,6 +77,37 @@ describe('rawQty · perda ao cozinhar', () => {
 describe('itemCost', () => {
   it('cobra pelo peso cru, que é o que vai no carrinho', () => {
     expect(itemCost(item(), cfg)).toBeCloseTo(53.333333, 6);
+  });
+});
+
+describe('idasNoMes', () => {
+  it('conta as idas pela frequência e pelos dias do mês', () => {
+    expect(idasNoMes('mes', cfg)).toBe(1);
+    expect(idasNoMes('quinzena', cfg)).toBe(2);
+    expect(idasNoMes('semana', cfg)).toBeCloseTo(4.285714, 6);
+    expect(idasNoMes('semana', { ...cfg, dias: 28 })).toBe(4);
+  });
+
+  it('nunca desce abaixo de uma ida', () => {
+    expect(idasNoMes('semana', { ...cfg, dias: 5 })).toBe(1);
+    expect(idasNoMes('quinzena', { ...cfg, dias: 7 })).toBe(1);
+  });
+});
+
+describe('qtyPorIda', () => {
+  it('divide o mês pelas idas', () => {
+    // Defeito 6: a banana de 5 kg/mês aparecia como 5 kg embaixo de um
+    // cabeçalho que diz "toda semana" — 4x o orçado.
+    const banana = item({ qty: 5, freq: 'semana', cook: false });
+    expect(qtyPorIda(banana, cfg)).toBeCloseTo(1.166667, 6);
+  });
+
+  it('divide o peso cru, que é o que vai no carrinho', () => {
+    expect(qtyPorIda(item({ qty: 4, freq: 'quinzena' }), cfg)).toBeCloseTo(2.666667, 6);
+  });
+
+  it('item mensal leva o mês todo numa ida', () => {
+    expect(qtyPorIda(item({ qty: 4, cook: false }), cfg)).toBe(4);
   });
 });
 

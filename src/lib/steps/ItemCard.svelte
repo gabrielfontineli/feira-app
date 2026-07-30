@@ -1,7 +1,7 @@
 <script lang="ts">
   import { CATORDER } from '../dic';
   import { brl0 } from '../format';
-  import { itemCost, rawQty } from '../quantity';
+  import { itemCost, LOSS_MAX, rawQty } from '../quantity';
   import { feira } from '../state.svelte';
   import type { Item } from '../types';
 
@@ -19,8 +19,10 @@
   </div>
   <div class="mini">
     <div>
+      <!-- Com `cook` ligado o campo é peso cozido: o rótulo tem que dizer,
+           senão o mesmo número significa duas coisas (defeito 10). -->
       <label>
-        Qtd/mês
+        {item.cook ? 'Qtd/mês cozido' : 'Qtd/mês'}
         <input type="number" step="any" min="0" bind:value={item.qty} />
       </label>
     </div>
@@ -57,13 +59,30 @@
       </label>
     </div>
   </div>
+  {#if item.cook}
+    <div class="mini" style="margin-top:8px">
+      <div>
+        <label>
+          Perda ao cozinhar %
+          <input
+            type="number"
+            step="any"
+            min="0"
+            max={LOSS_MAX}
+            placeholder={String(feira.cfg.loss)}
+            bind:value={item.loss}
+          />
+        </label>
+      </div>
+    </div>
+  {/if}
   <div class="foot">
     <label class="chk" style="font-size:13px">
       <input type="checkbox" bind:checked={item.cook} /> Coz. (perde peso)
     </label>
     <span class="cost">
       {brl0(cost)}
-      {#if item.cook}<span class="raw">· comprar {raw.toFixed(1)} {item.unit}</span>{/if}
+      {#if item.cook}<span class="raw">· comprar {raw.toFixed(1)} {item.unit} cru</span>{/if}
     </span>
   </div>
   {#if item.nota}

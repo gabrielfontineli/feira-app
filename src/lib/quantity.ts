@@ -1,5 +1,5 @@
 import { nid } from './format';
-import type { Cfg, DicEntry, Item, PriceBase } from './types';
+import type { Cfg, DicEntry, Freq, Item, PriceBase } from './types';
 
 /**
  * Teto da perda ao cozinhar. Existe pra `1 - perda` nunca virar zero: com
@@ -38,6 +38,27 @@ export function rawQty(it: Item, cfg: Cfg): number {
 
 export function itemCost(it: Item, cfg: Cfg): number {
   return rawQty(it, cfg) * (it.price || 0);
+}
+
+/**
+ * Quantas vezes você compra este item no mês, pela frequência dele. Sai de
+ * `cfg.dias` em vez de um campo novo: quem compra toda semana num mês de 30
+ * dias vai ~4,3 vezes. Nunca menos de uma ida.
+ */
+export function idasNoMes(freq: Freq, cfg: Cfg): number {
+  const dias = Math.max(1, cfg.dias);
+  if (freq === 'semana') return Math.max(1, dias / 7);
+  if (freq === 'quinzena') return Math.max(1, dias / 15);
+  return 1;
+}
+
+/**
+ * Quanto levar nesta ida ao mercado, em peso cru. `qty` é mensal — está
+ * decidido —, mas a lista mostrava o número do mês embaixo de um cabeçalho que
+ * diz "toda semana", então a banana de 5 kg lia como 5 kg por ida (defeito 6).
+ */
+export function qtyPorIda(it: Item, cfg: Cfg): number {
+  return rawQty(it, cfg) / idasNoMes(it.freq, cfg);
 }
 
 /** Respeita os interruptores de limpeza / higiene / extras. */

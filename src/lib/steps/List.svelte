@@ -2,7 +2,7 @@
   import { CATORDER, FREQ, MESES } from '../dic';
   import { brl0 } from '../format';
   import { byCategory } from '../group';
-  import { itemCost, rawQty } from '../quantity';
+  import { idasNoMes, itemCost, qtyPorIda, rawQty } from '../quantity';
   import { feira } from '../state.svelte';
   import { toast } from '../toaster.svelte';
   import type { Freq, Item } from '../types';
@@ -23,9 +23,27 @@
   const sobra = $derived(feira.cfg.vale - total);
   const pct = $derived(on.length ? Math.round((done / on.length) * 100) : 0);
 
-  const qtyLabel = (i: Item) => (i.cook ? rawQty(i, feira.cfg).toFixed(1) : i.qty) + ' ' + i.unit;
+  /** Número com vírgula, sem zero à direita: 1.1666 -> '1,17', 5 -> '5'. */
+  const q = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+
+  /**
+   * O número grande é o que levar nesta ida, em peso cru — é a decisão de
+   * compra. O total do mês e o peso cozido correspondente vão na nota, porque
+   * um número com dois significados não dizia qual era qual (defeitos 6 e 10).
+   */
+  const qtyLabel = (i: Item) =>
+    idasNoMes(i.freq, feira.cfg) > 1
+      ? q(qtyPorIda(i, feira.cfg)) + ' ' + i.unit + ' por ida'
+      : q(rawQty(i, feira.cfg)) + ' ' + i.unit;
+
   const noteLabel = (i: Item) =>
-    [i.cook ? 'peso cru · rende ' + i.qty + ' ' + i.unit : '', i.nota || ''].filter(Boolean).join(' · ');
+    [
+      idasNoMes(i.freq, feira.cfg) > 1 ? q(rawQty(i, feira.cfg)) + ' ' + i.unit + ' no mês' : '',
+      i.cook ? 'peso cru · rende ' + q(i.qty) + ' ' + i.unit + ' cozido' : '',
+      i.nota || '',
+    ]
+      .filter(Boolean)
+      .join(' · ');
 
   async function copy() {
     let txt = '🛒 Lista de ' + MESES[feira.ym.m] + ' ' + feira.ym.y + '\n';
