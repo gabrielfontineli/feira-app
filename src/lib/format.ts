@@ -1,7 +1,23 @@
-/** Número no formato pt-BR das notas: '1.052,80' -> 1052.8 */
+/**
+ * Número como as notas escrevem: '1.052,80' -> 1052.8, '25.49' -> 25.49.
+ *
+ * O separador decimal é o último `,` ou `.` do token; os anteriores são de
+ * milhar. Isso deixa '1.052' valer 1,052 e não 1052 — aceitável porque os
+ * campos lidos da nota são quantidade e preço unitário, onde valor acima de mil
+ * não existe, enquanto '25.49' virando 2549 envenenava a base de preço.
+ *
+ * Estrito de propósito: só devolve número se o token for inteiramente
+ * numérico. '1KG' e 'T1' viram NaN em vez de 1, o que impede a linha mal
+ * fatiada de entrar como preço.
+ */
 export function toNum(s: string | number | null | undefined): number {
+  if (typeof s === 'number') return Number.isFinite(s) ? s : NaN;
   if (!s) return NaN;
-  const v = parseFloat(String(s).trim().replace(/\./g, '').replace(',', '.'));
+  const t = String(s).trim();
+  const dec = Math.max(t.lastIndexOf(','), t.lastIndexOf('.'));
+  const norm = dec < 0 ? t : t.slice(0, dec).replace(/[.,]/g, '') + '.' + t.slice(dec + 1);
+  if (!/^-?(\d+\.?\d*|\.\d+)$/.test(norm)) return NaN;
+  const v = parseFloat(norm);
   return isNaN(v) ? NaN : v;
 }
 
