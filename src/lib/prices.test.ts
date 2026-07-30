@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aceitarPendente, learnPrices } from './prices';
+import { aceitarPendente, learnPrices, registrarPago } from './prices';
 import type { NFRow, PriceBase } from './types';
 
 const HOJE = '2026-07-30';
@@ -173,5 +173,65 @@ describe('aceitarPendente', () => {
     const r = aceitarPendente(base, pendente(), undefined, HOJE);
     expect(r.conflito).toMatchObject({ unitAtual: 'kg', unit: 'un' });
     expect(r.base['Filé de frango'].price).toBe(25);
+  });
+});
+
+describe('registrarPago · preço digitado ao riscar o item da lista', () => {
+  const KEY = 'file-de-frango';
+  const NOME = 'Filé de frango';
+
+  it('primeira digitação entra como o preço, igual à primeira nota', () => {
+    const r = registrarPago({}, {}, KEY, NOME, 42.9, 'kg', HOJE);
+    expect(r.base[NOME]).toMatchObject({ price: 42.9, unit: 'kg', n: 1, lastSeen: HOJE });
+    expect(r.pagos[KEY]).toMatchObject({ name: NOME, obs: 42.9, prev: null });
+  });
+
+  it('recalibra por EWMA quando já havia preço guardado', () => {
+    const base: PriceBase = { [NOME]: { price: 20, unit: 'kg', n: 4 } };
+    const r = registrarPago(base, {}, KEY, NOME, 25.49, 'kg', HOJE);
+    expect(r.base[NOME].price).toBeCloseTo(20 + 0.3 * (25.49 - 20), 6);
+    expect(r.pagos[KEY].prev).toEqual({ price: 20, unit: 'kg', n: 4 });
+  });
+
+  it('corrigir o valor digitado não conta duas vezes na média', () => {
+    // O caso que importa: digitar 42,90 no lugar de 4,29 e consertar. Sem
+    // desfazer a observação anterior, a EWMA comeria as duas e o número usado
+    // pra orçar sairia entre elas.
+    const base: PriceBase = { [NOME]: { price: 20, unit: 'kg', n: 4 } };
+    const errado = registrarPago(base, {}, KEY, NOME, 42.9, 'kg', HOJE);
+    const corrigido = registrarPago(errado.base, errado.pagos, KEY, NOME, 4.29, 'kg', HOJE);
+    const dePrimeira = registrarPago(base, {}, KEY, NOME, 4.29, 'kg', HOJE);
+    expect(corrigido.base).toEqual(dePrimeira.base);
+    expect(corrigido.pagos).toEqual(dePrimeira.pagos);
+  });
+
+  it('apagar o campo devolve o preço que havia antes', () => {
+    const base: PriceBase = { [NOME]: { price: 20, unit: 'kg', n: 4, lastSeen: '2026-01-01' } };
+    const r1 = registrarPago(base, {}, KEY, NOME, 42.9, 'kg', HOJE);
+    const r2 = registrarPago(r1.base, r1.pagos, KEY, NOME, NaN, 'kg', HOJE);
+    expect(r2.base).toEqual(base);
+    expect(r2.pagos[KEY]).toBeUndefined();
+  });
+
+  it('apagar o campo de um nome novo tira o nome da base', () => {
+    const r1 = registrarPago({}, {}, KEY, NOME, 42.9, 'kg', HOJE);
+    const r2 = registrarPago(r1.base, r1.pagos, KEY, NOME, 0, 'kg', HOJE);
+    expect(r2.base).toEqual({});
+  });
+
+  it('unidade incompatível não entra: devolve conflito e deixa a base intacta', () => {
+    const base: PriceBase = { [NOME]: { price: 25, unit: 'kg', n: 2 } };
+    const r = registrarPago(base, {}, KEY, NOME, 17, 'un', HOJE);
+    expect(r.conflito).toMatchObject({ name: NOME, unit: 'un', unitAtual: 'kg' });
+    expect(r.base).toEqual(base);
+    expect(r.pagos).toEqual({});
+  });
+
+  it('conflito não destrói o registro válido anterior do mesmo item', () => {
+    const base: PriceBase = { [NOME]: { price: 25, unit: 'kg', n: 2 } };
+    const ok = registrarPago(base, {}, KEY, NOME, 30, 'kg', HOJE);
+    const ruim = registrarPago(ok.base, ok.pagos, KEY, NOME, 17, 'un', HOJE);
+    expect(ruim.base).toEqual(ok.base);
+    expect(ruim.pagos).toEqual(ok.pagos);
   });
 });

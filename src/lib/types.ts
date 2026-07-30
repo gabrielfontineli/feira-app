@@ -37,6 +37,30 @@ export interface PriceEntry {
 
 export type PriceBase = Record<string, PriceEntry>;
 
+/**
+ * Preço digitado direto na lista, num mês. Guarda o estado anterior da base
+ * porque é o que permite corrigir sem estragar a média — ver `registrarPago`.
+ */
+export interface Pago {
+  /** Nome sob o qual o preço entrou na base. */
+  name: string;
+  /** Preço unitário digitado. */
+  obs: number;
+  unit: string;
+  /** Entrada da base antes desta observação. Null: o nome ainda não existia. */
+  prev: PriceEntry | null;
+  /**
+   * Preço que o item da lista mostrava antes da primeira digitação. A base é a
+   * fonte do preço, mas item criado à mão pode ter preço sem nunca ter entrado
+   * na base — sem isto, apagar o campo zerava esse preço. Quem preenche é a
+   * camada de estado; `registrarPago` só carrega o valor adiante.
+   */
+  prevPrice?: number;
+}
+
+/** Preços digitados num mês, chaveados igual às marcações (slug do nome). */
+export type Pagos = Record<string, Pago>;
+
 /** Marcações de um mês: id do item -> comprado. */
 export type Checks = Record<string, boolean>;
 
@@ -75,4 +99,6 @@ export interface Backup {
   base: PriceBase;
   /** 'check:YYYY-MM' -> marcações daquele mês. */
   checks: Record<string, Checks>;
+  /** 'pago:YYYY-MM' -> preços digitados na lista. Backup antigo não tem. */
+  pagos?: Record<string, Pagos>;
 }

@@ -1,6 +1,7 @@
 import { checkKey, remapChecks } from './checks';
-import { allCheckKeys, ddel, dget, dset } from './storage';
-import type { Backup, Cfg, Checks, Item, PriceBase } from './types';
+import { registrarPago, type PriceConflict } from './prices';
+import { allKeys, ddel, dget, dset } from './storage';
+import type { Backup, Cfg, Checks, Item, Pagos, PriceBase } from './types';
 
 const K_CFG = 'cfg';
 const K_ITENS = 'itens';
@@ -45,7 +46,11 @@ export function toCfg(raw: unknown): Cfg {
   };
 }
 
-const monthKey = (y: number, m: number) => 'check:' + y + '-' + String(m + 1).padStart(2, '0');
+const CHECK = 'check:';
+const PAGO = 'pago:';
+
+const monthKey = (pfx: string, y: number, m: number) =>
+  pfx + y + '-' + String(m + 1).padStart(2, '0');
 
 class Feira {
   cfg = $state<Cfg>({ ...DEFAULT_CFG });
@@ -53,11 +58,14 @@ class Feira {
   base = $state<PriceBase>({});
   /** Marcações do mês aberto. Os outros meses ficam no storage. */
   checks = $state<Checks>({});
+  /** Preços digitados na lista no mês aberto. Mesma chave das marcações. */
+  pagos = $state<Pagos>({});
   ym = $state({ y: new Date().getFullYear(), m: new Date().getMonth() });
   /** Falso até o storage terminar de carregar, pra não salvar em cima. */
   ready = $state(false);
 
-  readonly key = $derived(monthKey(this.ym.y, this.ym.m));
+  readonly key = $derived(monthKey(CHECK, this.ym.y, this.ym.m));
+  readonly keyPago = $derived(monthKey(PAGO, this.ym.y, this.ym.m));
 
   async load() {
     const c = await dget<Partial<Cfg>>(K_CFG);
@@ -78,7 +86,7 @@ class Feira {
    */
   private async migrate() {
     if ((await dget<number>(K_VER)) === VERSION) return;
-    for (const k of allCheckKeys()) {
+    for (const k of allKeys(CHECK)) {
       const old = await dget<Checks>(k);
       if (old && Object.keys(old).length) await dset(k, remapChecks(old, this.itens));
     }
@@ -87,6 +95,7 @@ class Feira {
 
   async loadChecks() {
     this.checks = (await dget<Checks>(this.key)) || {};
+    this.pagos = (await dget<Pagos>(this.keyPago)) || {};
   }
 
   async goMonth(d: number) {
@@ -114,20 +123,54 @@ class Feira {
     void dset(this.key, this.checks);
   }
 
-  async resetMonth() {
-    this.checks = {};
-    await ddel(this.key);
+  /**
+   * Guarda o preço unitário digitado ao riscar o item. Devolve o conflito de
+   * unidade em vez de aplicar, igual ao caminho da nota fiscal.
+   */
+  registrarPreco(it: Item, obs: number): PriceConflict | null {
+    const k = checkKey(it);
+    const antes = this.pagos[k];
+    const r = registrarPago(this.base, this.pagos, k, it.name, obs, it.unit);
+    if (r.conflito) return r.conflito;
+    this.base = r.base;
+    const novo = r.pagos[k];
+    if (novo) novo.prevPrice = antes ? antes.prevPrice : it.price;
+    // O preço do item segue a base. Quando apagar o campo não deixa entrada na
+    // base, volta o que o item mostrava antes — ver `Pago.prevPrice`.
+    const e = r.base[it.name];
+    it.price = e ? Math.round(e.price * 100) / 100 : (antes?.prevPrice ?? it.price);
+    this.pagos = r.pagos;
+    void dset(this.keyPago, this.pagos);
+    return null;
   }
 
-  /** Marcações de todos os meses guardados — o backup levava só o mês aberto. */
-  async everyMonthChecks(): Promise<Record<string, Checks>> {
-    const out: Record<string, Checks> = {};
-    for (const k of allCheckKeys()) {
-      const v = k === this.key ? this.checks : await dget<Checks>(k);
+  async resetMonth() {
+    this.checks = {};
+    this.pagos = {};
+    await ddel(this.key);
+    await ddel(this.keyPago);
+  }
+
+  /**
+   * Um registro por mês guardado — o backup levava só o mês aberto. Serve pras
+   * marcações e pros preços digitados, que têm o mesmo formato de chave.
+   */
+  private async everyMonth<T extends object>(
+    pfx: string,
+    key: string,
+    atual: T,
+  ): Promise<Record<string, T>> {
+    const out: Record<string, T> = {};
+    for (const k of allKeys(pfx)) {
+      const v = k === key ? atual : await dget<T>(k);
       if (v && Object.keys(v).length) out[k] = v;
     }
-    if (Object.keys(this.checks).length) out[this.key] = this.checks;
+    if (Object.keys(atual).length) out[key] = atual;
     return out;
+  }
+
+  everyMonthChecks(): Promise<Record<string, Checks>> {
+    return this.everyMonth(CHECK, this.key, this.checks);
   }
 
   async backup(): Promise<Backup> {
@@ -139,6 +182,7 @@ class Feira {
       itens: this.itens,
       base: this.base,
       checks: await this.everyMonthChecks(),
+      pagos: await this.everyMonth(PAGO, this.keyPago, this.pagos),
     };
   }
 
@@ -154,6 +198,13 @@ class Feira {
         if (/^check:\d{4}-\d{2}$/.test(k) && v) await dset(k, v);
       }
     }
+    // Backup exportado antes dos preços na lista não traz `pagos`: sem eles o
+    // app só perde a chance de desfazer uma digitação de mês passado.
+    if (d.pagos && typeof d.pagos === 'object') {
+      for (const [k, v] of Object.entries(d.pagos)) {
+        if (/^pago:\d{4}-\d{2}$/.test(k) && v) await dset(k, v);
+      }
+    }
     this.cfg.started = 1;
     // O backup pode ter sido exportado antes da chave estável.
     await dset(K_VER, 0);
@@ -163,7 +214,7 @@ class Feira {
   }
 
   async nuke() {
-    for (const k of allCheckKeys()) await ddel(k);
+    for (const k of [...allKeys(CHECK), ...allKeys(PAGO)]) await ddel(k);
     await ddel(K_CFG);
     await ddel(K_ITENS);
     await ddel(K_BASE);
@@ -172,6 +223,7 @@ class Feira {
     this.itens = [];
     this.base = {};
     this.checks = {};
+    this.pagos = {};
   }
 
   persistNow() {

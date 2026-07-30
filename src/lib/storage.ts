@@ -46,16 +46,19 @@ export async function ddel(k: string): Promise<void> {
   localDel(k);
 }
 
-/** Toda chave de marcação já guardada, pra backup não perder histórico. */
-export function allCheckKeys(): string[] {
+/**
+ * Toda chave guardada sob um prefixo ('check:', 'pago:'), pra backup não perder
+ * histórico. O mês aberto vive em memória; os outros só existem aqui.
+ */
+export function allKeys(pfx: string): string[] {
   try {
     const out: string[] = [];
     for (let i = 0; i < window.localStorage.length; i++) {
       const k = window.localStorage.key(i);
-      if (k && k.startsWith(PFX + 'check:')) out.push(k.slice(PFX.length));
+      if (k && k.startsWith(PFX + pfx)) out.push(k.slice(PFX.length));
     }
     return out.sort();
   } catch {
-    return Object.keys(MemFallback).filter((k) => k.startsWith('check:')).sort();
+    return Object.keys(MemFallback).filter((k) => k.startsWith(pfx)).sort();
   }
 }

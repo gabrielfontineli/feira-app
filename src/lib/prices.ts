@@ -1,6 +1,6 @@
 import { prettify } from './format';
 import { resolve } from './match';
-import type { DicEntry, NFRow, PriceBase, PriceEntry } from './types';
+import type { DicEntry, NFRow, Pagos, PriceBase, PriceEntry } from './types';
 
 /**
  * Peso do preço novo na média exponencial. Com 0,3 um aumento real chega em
@@ -210,6 +210,53 @@ export function learnPrices(base: PriceBase, rows: NFRow[], ref = hoje()): Learn
   }
 
   return { base: next, novos, recal, learned, conflitos, pendentes };
+}
+
+/**
+ * Registra o preço unitário digitado ao riscar um item da lista. É uma
+ * observação, exatamente como uma nota fiscal é: mesma EWMA, mesmo ALPHA.
+ *
+ * O que esta função resolve além do `mergePrice` é a **correção**. Digitar
+ * 42,90 no lugar de 4,29 e consertar chamaria a EWMA duas vezes, e o preço
+ * usado pra orçar acabaria entre os dois valores. Por isso cada registro
+ * carrega o `PriceEntry` que havia antes: corrigir restaura o anterior e só
+ * então funde o valor novo. Sem replay de histórico, e exato.
+ *
+ * `obs` inválido ou não positivo significa campo apagado: desfaz e sai.
+ */
+export function registrarPago(
+  base: PriceBase,
+  pagos: Pagos,
+  key: string,
+  name: string,
+  obs: number,
+  unit: string,
+  ref = hoje(),
+): { base: PriceBase; pagos: Pagos; conflito: PriceConflict | null } {
+  const antes = pagos[key];
+  let limpa = base;
+  if (antes) {
+    limpa = { ...base };
+    if (antes.prev) limpa[antes.name] = antes.prev;
+    else delete limpa[antes.name];
+  }
+
+  if (!Number.isFinite(obs) || obs <= 0) {
+    if (!antes) return { base, pagos, conflito: null };
+    const { [key]: _, ...resto } = pagos;
+    return { base: limpa, pagos: resto, conflito: null };
+  }
+
+  const m = mergePrice(limpa, name, obs, unit, ref);
+  // Unidade incompatível: nada muda, nem o registro válido que já estava lá.
+  if (m.conflito) return { base, pagos, conflito: m.conflito };
+
+  const prev = limpa[name] ?? null;
+  return {
+    base: m.base,
+    pagos: { ...pagos, [key]: { name, obs, unit, prev } },
+    conflito: null,
+  };
 }
 
 /**

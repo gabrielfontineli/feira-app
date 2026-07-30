@@ -1,7 +1,8 @@
 <script lang="ts">
+  import { checkKey } from '../checks';
   import { copyText } from '../clipboard';
   import { CATORDER, FREQ, MESES } from '../dic';
-  import { brl0 } from '../format';
+  import { brl0, brl2, toNum } from '../format';
   import { byCategory } from '../group';
   import { idasNoMes, itemCost, qtyPorIda, rawQty } from '../quantity';
   import { feira } from '../state.svelte';
@@ -45,6 +46,28 @@
     ]
       .filter(Boolean)
       .join(' · ');
+
+  /** O que já foi digitado pra este item neste mês, pra reabrir preenchido. */
+  const pagoDe = (i: Item) => {
+    const p = feira.pagos[checkKey(i)];
+    return p ? brl2(p.obs) : '';
+  };
+
+  /**
+   * Guarda o preço unitário digitado. Campo vazio desfaz o registro do mês —
+   * é o jeito de corrigir sem que a média conte a digitação errada.
+   */
+  function registrar(i: Item, el: HTMLInputElement) {
+    const conflito = feira.registrarPreco(i, toNum(el.value));
+    if (!conflito) {
+      el.value = pagoDe(i);
+      return;
+    }
+    el.value = '';
+    toast.show(
+      `${i.name} está guardado por ${conflito.unitAtual}. Ajuste a unidade em itens.`,
+    );
+  }
 
   async function copy() {
     let txt = '🛒 Lista de ' + MESES[feira.ym.m] + ' ' + feira.ym.y + '\n';
@@ -117,21 +140,45 @@
           {#each byCategory(list) as [cat, items] (cat)}
             <div class="catlabel" style="margin:12px 0 4px 12px">{cat}</div>
             {#each items as i (i.id)}
-              <button class="item" class:done={feira.isChecked(i)} onclick={() => feira.toggle(i)}>
-                <span class="cbx">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M20 6 9 17l-5-5" />
-                  </svg>
-                </span>
-                <span class="lbl">
-                  {i.name}
-                  {#if noteLabel(i)}<span class="note">{noteLabel(i)}</span>{/if}
-                </span>
-                <span class="qp">
-                  <span class="qty">{qtyLabel(i)}</span>
-                  {#if i.price}<span class="prc num">{brl0(itemCost(i, feira.cfg))}</span>{/if}
-                </span>
-              </button>
+              <div class="item" class:done={feira.isChecked(i)}>
+                <button
+                  class="tick"
+                  role="checkbox"
+                  aria-checked={feira.isChecked(i)}
+                  onclick={() => feira.toggle(i)}
+                >
+                  <span class="cbx">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  </span>
+                  <span class="lbl">
+                    {i.name}
+                    {#if noteLabel(i)}<span class="note">{noteLabel(i)}</span>{/if}
+                  </span>
+                  <span class="qp">
+                    <span class="qty">{qtyLabel(i)}</span>
+                    {#if i.price}<span class="prc num">{brl0(itemCost(i, feira.cfg))}</span>{/if}
+                  </span>
+                </button>
+                <!-- O campo só nasce depois de marcar: andando pelo mercado a
+                     lista fica limpa, e não vira uma parede de inputs no
+                     celular. Digitar é opcional — o placeholder já mostra o
+                     preço de referência que o orçamento está usando. -->
+                {#if feira.isChecked(i)}
+                  <label class="paid noprint">
+                    <span>R$ / {i.unit}</span>
+                    <input
+                      type="text"
+                      inputmode="decimal"
+                      enterkeyhint="done"
+                      placeholder={brl2(feira.base[i.name]?.price ?? i.price)}
+                      value={pagoDe(i)}
+                      onchange={(e) => registrar(i, e.currentTarget)}
+                    />
+                  </label>
+                {/if}
+              </div>
             {/each}
           {/each}
         </div>
@@ -172,10 +219,10 @@
   .fhead h4{font-family:'Fraunces',serif;font-weight:600;font-size:17px;margin:0;text-transform:lowercase}
   .fhead .cnt{font-family:'Space Mono',monospace;font-size:12.5px;color:var(--green-deep);flex:none}
 
-  .item{width:100%;font-family:inherit;text-align:left;background:none;border:none;
-    display:flex;align-items:center;gap:12px;padding:11px 12px;cursor:pointer;color:inherit}
-  .item:active{background:#f0f3ea}
   .item + .item{border-top:1px solid #f1f3ec}
+  .tick{width:100%;font-family:inherit;text-align:left;background:none;border:none;
+    display:flex;align-items:center;gap:12px;padding:11px 12px;cursor:pointer;color:inherit}
+  .tick:active{background:#f0f3ea}
   .cbx{width:24px;height:24px;border:2px solid var(--green);border-radius:7px;flex:none;display:grid;place-items:center;transition:.15s}
   .cbx svg{width:13px;height:13px;opacity:0;transform:scale(.5);transition:.15s}
   .item.done .cbx{background:var(--green);border-color:var(--green)}
@@ -186,4 +233,9 @@
   .item .qty{font-family:'Space Mono',monospace;font-size:12.5px;color:var(--muted);display:block}
   .item .prc{font-family:'Space Mono',monospace;font-size:12.5px;color:var(--green-deep);font-weight:700}
   .item.done .lbl,.item.done .qty,.item.done .prc{text-decoration:line-through;color:var(--muted)}
+
+  .paid{display:flex;align-items:center;gap:8px;padding:0 12px 11px 48px}
+  .paid span{font-family:'Space Mono',monospace;font-size:12px;color:var(--muted);flex:none}
+  .paid input{flex:1;min-width:0;padding:8px 10px;text-align:right;
+    font-family:'Space Mono',monospace}
 </style>
