@@ -1,7 +1,7 @@
 <script lang="ts">
   import { brl2, norm } from '../format';
   import { parseNF } from '../parseNF';
-  import { learnPrices } from '../prices';
+  import { learnPrices, type PriceConflict } from '../prices';
   import { allowed, itemFromDic } from '../quantity';
   import { feira } from '../state.svelte';
 
@@ -10,6 +10,7 @@
   let text = $state('');
   let error = $state('');
   let result = $state<{ lidas: number; novos: number; recal: number; add: number; ignoradas: number } | null>(null);
+  let conflitos = $state<PriceConflict[]>([]);
 
   const placeholder =
     '001\tFILE PEITO FGO SADIA BD 1KG\t1,0\tUN\t25,49\t0,00\t25,49\n' +
@@ -18,6 +19,7 @@
   function read() {
     error = '';
     result = null;
+    conflitos = [];
     if (!text.trim()) {
       error = 'Cole o texto da nota primeiro.';
       return;
@@ -29,8 +31,10 @@
       return;
     }
 
-    const { base, novos, recal, learned } = learnPrices(feira.base, rows);
+    const lp = learnPrices(feira.base, rows);
+    const { base, novos, recal, learned } = lp;
     feira.base = base;
+    conflitos = lp.conflitos;
 
     let add = 0;
     for (const { name, entry } of learned) {
@@ -77,6 +81,20 @@
       <span style="color:var(--muted)">({result.ignoradas} linhas ignoradas)</span>
     {/if}
   </div>
+  {#if conflitos.length}
+    <div class="warnbox">
+      <b>Unidade não bate, preço não foi aprendido.</b>
+      {#each conflitos as c (c.name)}
+        <div class="small">
+          {c.name}: a nota traz R$ {brl2(c.price)} por {c.unit}{c.unitAtual
+            ? ', mas o preço guardado é por ' + c.unitAtual
+            : ', e por outra unidade na mesma nota'}. Ajuste na mão em <b>itens</b> se
+          a unidade mudou de verdade.
+        </div>
+      {/each}
+    </div>
+  {/if}
+
   <h3>preços na memória</h3>
   <div>
     {#each Object.entries(feira.base) as [name, entry] (name)}

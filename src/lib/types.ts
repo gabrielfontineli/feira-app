@@ -27,8 +27,10 @@ export interface Cfg {
 export interface PriceEntry {
   price: number;
   unit: string;
-  /** Quantas linhas de nota já entraram nesta média. */
+  /** Quantas notas já entraram nesta média. Base antiga contava linhas. */
   n: number;
+  /** Data (AAAA-MM-DD) da última nota que mexeu no preço. Base antiga não tem. */
+  lastSeen?: string;
 }
 
 export type PriceBase = Record<string, PriceEntry>;
