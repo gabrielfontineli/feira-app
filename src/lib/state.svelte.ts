@@ -1,9 +1,14 @@
+import { checkKey, remapChecks } from './checks';
 import { allCheckKeys, ddel, dget, dset } from './storage';
 import type { Backup, Cfg, Checks, Item, PriceBase } from './types';
 
 const K_CFG = 'cfg';
 const K_ITENS = 'itens';
 const K_BASE = 'base';
+const K_VER = 'ver';
+
+/** 2: marcações passaram a ser chaveadas pelo slug do nome, não pelo id. */
+const VERSION = 2;
 
 export const DEFAULT_CFG: Cfg = {
   pessoas: 2,
@@ -61,8 +66,23 @@ class Feira {
     if (Array.isArray(i)) this.itens = i;
     const b = await dget<PriceBase>(K_BASE);
     if (b) this.base = b;
+    await this.migrate();
     await this.loadChecks();
     this.ready = true;
+  }
+
+  /**
+   * Reescreve as marcações já guardadas na chave estável. Roda uma vez: os ids
+   * aleatórios só existem no que foi salvo antes desta versão, e depois da
+   * conversão não há mais de onde tirar o mapa id -> nome.
+   */
+  private async migrate() {
+    if ((await dget<number>(K_VER)) === VERSION) return;
+    for (const k of allCheckKeys()) {
+      const old = await dget<Checks>(k);
+      if (old && Object.keys(old).length) await dset(k, remapChecks(old, this.itens));
+    }
+    await dset(K_VER, VERSION);
   }
 
   async loadChecks() {
@@ -83,8 +103,14 @@ class Feira {
     await this.loadChecks();
   }
 
-  toggle(id: string) {
-    this.checks[id] = !this.checks[id];
+  /** Marcado? Chaveado pelo slug do nome, não pelo id — ver checks.ts. */
+  isChecked(it: Item): boolean {
+    return !!this.checks[checkKey(it)];
+  }
+
+  toggle(it: Item) {
+    const k = checkKey(it);
+    this.checks[k] = !this.checks[k];
     void dset(this.key, this.checks);
   }
 
@@ -129,6 +155,9 @@ class Feira {
       }
     }
     this.cfg.started = 1;
+    // O backup pode ter sido exportado antes da chave estável.
+    await dset(K_VER, 0);
+    await this.migrate();
     await this.loadChecks();
     this.persistNow();
   }
@@ -138,6 +167,7 @@ class Feira {
     await ddel(K_CFG);
     await ddel(K_ITENS);
     await ddel(K_BASE);
+    await ddel(K_VER);
     this.cfg = { ...DEFAULT_CFG };
     this.itens = [];
     this.base = {};

@@ -17,9 +17,9 @@
   );
   const total = $derived(on.reduce((s, i) => s + itemCost(i, feira.cfg), 0));
   const spent = $derived(
-    on.filter((i) => feira.checks[i.id]).reduce((s, i) => s + itemCost(i, feira.cfg), 0),
+    on.filter((i) => feira.isChecked(i)).reduce((s, i) => s + itemCost(i, feira.cfg), 0),
   );
-  const done = $derived(on.filter((i) => feira.checks[i.id]).length);
+  const done = $derived(on.filter((i) => feira.isChecked(i)).length);
   const sobra = $derived(feira.cfg.vale - total);
   const pct = $derived(on.length ? Math.round((done / on.length) * 100) : 0);
 
@@ -32,7 +32,7 @@
     for (const { f, list } of sections) {
       txt += '\n— ' + FREQ[f].t.toUpperCase() + ' —\n';
       for (const i of list) {
-        txt += (feira.checks[i.id] ? '[x] ' : '[ ] ') + i.name + ' · ' + qtyLabel(i) + '\n';
+        txt += (feira.isChecked(i) ? '[x] ' : '[ ] ') + i.name + ' · ' + qtyLabel(i) + '\n';
       }
     }
     txt += '\nTotal estimado: ' + brl0(total);
@@ -105,14 +105,14 @@
           <span class="tag">{FREQ[f].t}</span>
           <h4>{FREQ[f].h}</h4>
         </div>
-        <span class="cnt">{list.filter((i) => feira.checks[i.id]).length}/{list.length}</span>
+        <span class="cnt">{list.filter((i) => feira.isChecked(i)).length}/{list.length}</span>
       </button>
       {#if open[f]}
         <div>
           {#each byCategory(list) as [cat, items] (cat)}
             <div class="catlabel" style="margin:12px 0 4px 12px">{cat}</div>
             {#each items as i (i.id)}
-              <button class="item" class:done={feira.checks[i.id]} onclick={() => feira.toggle(i.id)}>
+              <button class="item" class:done={feira.isChecked(i)} onclick={() => feira.toggle(i)}>
                 <span class="cbx">
                   <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M20 6 9 17l-5-5" />

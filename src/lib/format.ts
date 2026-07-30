@@ -32,6 +32,16 @@ export const nid = (): string => 'x' + Math.random().toString(36).slice(2, 8);
 export const norm = (s: string): string =>
   String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
+/**
+ * Nome vira identificador estável: 'Filé de frango' -> 'file-de-frango'.
+ * Mesmo algoritmo de tools/gerador-to-backup.mjs, de propósito: os dois
+ * precisam gerar a mesma chave pro backup importado achar as marcações.
+ */
+export const slug = (s: string): string =>
+  norm(s)
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+
 /** Descrição de nota que não casou com o dicionário: 3 primeiras palavras. */
 export function prettify(d: string): string {
   const w = d.toLowerCase().split(/\s+/).slice(0, 3).join(' ');
