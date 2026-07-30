@@ -66,7 +66,7 @@
   {:else if step === 4}
     <List />
   {:else}
-    <section class="panel"><Backup pickFile={() => fileInput.click()} /></section>
+    <section class="panel"><Backup {go} pickFile={() => fileInput.click()} /></section>
   {/if}
 
   <input type="file" bind:this={fileInput} accept="application/json,.json" class="hide" onchange={onFile} />

@@ -86,7 +86,7 @@
     </label>
   </div>
   <div class="btnrow">
-    <button class="btn primary" onclick={() => go(1)}>Continuar →</button>
+    <button class="btn primary" onclick={() => go(2)}>Continuar →</button>
     <button class="btn ghost" onclick={() => go(4)}>Ir pra lista</button>
   </div>
 {/if}

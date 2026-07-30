@@ -1,13 +1,24 @@
 <script lang="ts">
-  const STEPNAMES = ['início', 'nota fiscal', 'dieta', 'itens', 'lista', 'backup'];
+  /**
+   * A nota fiscal (passo 1) some daqui: virou importação em lote, alcançável
+   * pelo backup. O índice de cada passo continua o mesmo, então nenhum `go(n)`
+   * espalhado pelos componentes precisou ser renumerado.
+   */
+  const STEPS = [
+    { i: 0, name: 'início' },
+    { i: 2, name: 'dieta' },
+    { i: 3, name: 'itens' },
+    { i: 4, name: 'lista' },
+    { i: 5, name: 'backup' },
+  ];
 
   let { step, go }: { step: number; go: (i: number) => void } = $props();
 </script>
 
 <nav class="steps">
-  {#each STEPNAMES as name, i (name)}
+  {#each STEPS as { i, name }, pos (i)}
     <button class="stepbtn" class:on={i === step} onclick={() => go(i)}>
-      {#if i < 5}<span class="n">{i + 1}</span>{/if}{name}
+      {#if i < 5}<span class="n">{pos + 1}</span>{/if}{name}
     </button>
   {/each}
 </nav>

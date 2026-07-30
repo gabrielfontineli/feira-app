@@ -2,7 +2,7 @@
   import { feira } from '../state.svelte';
   import { toast } from '../toaster.svelte';
 
-  let { pickFile }: { pickFile: () => void } = $props();
+  let { pickFile, go }: { pickFile: () => void; go: (i: number) => void } = $props();
 
   async function exportar() {
     const dump = await feira.backup();
@@ -33,6 +33,15 @@
 <div class="btnrow" style="margin-top:0">
   <button class="btn primary" onclick={exportar}>Exportar backup (.json)</button>
   <button class="btn" onclick={pickFile}>Importar backup</button>
+</div>
+
+<h3>preços em lote</h3>
+<p class="small">
+  O jeito normal de ensinar um preço é digitar na hora de riscar o item da lista. Se você tiver o
+  texto de uma nota fiscal inteira em mãos, dá pra importar tudo de uma vez.
+</p>
+<div class="btnrow" style="margin-top:0">
+  <button class="btn" onclick={() => go(1)}>Colar uma nota fiscal</button>
 </div>
 
 <h3>instalar como app</h3>

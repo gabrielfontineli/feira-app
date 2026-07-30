@@ -82,19 +82,20 @@
   }
 </script>
 
-<h2>1 · colar a nota fiscal</h2>
+<h2>colar a nota fiscal</h2>
 <p class="small">
-  Cole o texto da nota do mercado. O app identifica descrição, quantidade e preço unitário, e guarda como
-  preço de referência. Cada nota nova recalibra a média.
+  Importação em lote, pra quando você tiver a nota inteira em mãos. No dia a dia é mais rápido digitar
+  o preço na <b>lista</b>, ao riscar o item. Cada nota conta como uma observação e recalibra a média.
 </p>
 <div class="hintbox">
   Funciona com o formato tabelado das notas brasileiras: <b>item · descrição · qtde · unid · vl. unid ·
-  desconto · vl. total</b>. Dá pra pegar esse texto no site da NFC-e ou no app do mercado.
+  desconto · vl. total</b>. Dá pra pegar esse texto no site da NFC-e, no app do mercado, ou
+  fotografando o papel e usando o copiar-texto do próprio celular.
 </div>
 <textarea bind:value={text} {placeholder}></textarea>
 <div class="btnrow">
   <button class="btn primary" onclick={read}>Ler nota fiscal</button>
-  <button class="btn ghost" onclick={() => go(2)}>Pular →</button>
+  <button class="btn ghost" onclick={() => go(5)}>Voltar</button>
 </div>
 
 {#if error}
@@ -160,7 +161,7 @@
     {/each}
   </div>
   <div class="btnrow">
-    <button class="btn primary" onclick={() => go(2)}>Continuar →</button>
+    <button class="btn primary" onclick={() => go(4)}>Ir pra lista →</button>
   </div>
 {/if}
 
