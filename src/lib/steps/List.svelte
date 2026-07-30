@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { copyText } from '../clipboard';
   import { CATORDER, FREQ, MESES } from '../dic';
   import { brl0 } from '../format';
   import { byCategory } from '../group';
@@ -54,22 +55,8 @@
       }
     }
     txt += '\nTotal estimado: ' + brl0(total);
-    try {
-      await navigator.clipboard.writeText(txt);
-      toast.show('Lista copiada');
-    } catch {
-      const ta = document.createElement('textarea');
-      ta.value = txt;
-      document.body.appendChild(ta);
-      ta.select();
-      try {
-        document.execCommand('copy');
-        toast.show('Lista copiada');
-      } catch {
-        alert(txt);
-      }
-      document.body.removeChild(ta);
-    }
+    if (await copyText(txt)) toast.show('Lista copiada');
+    else alert(txt);
   }
 
   async function resetMonth() {
