@@ -164,6 +164,34 @@ try {
   );
   check('item entra na lista marcado como avulso da ida', avulso === '1/1', avulso);
 
+  // As duas saídas de texto da lista. Em vez de pedir permissão de área de
+  // transferência ao Chrome, intercepta o `writeText`: o que interessa aqui é o
+  // texto que o app monta, e a cópia em si é o `copyText`, que tem teste.
+  const clicaECopia = (rotulo) => `(async () => {
+    let capturado = '';
+    const real = navigator.clipboard.writeText.bind(navigator.clipboard);
+    navigator.clipboard.writeText = async (t) => { capturado = t; };
+    [...document.querySelectorAll('.btn')].find(b=>b.textContent.trim()==='${rotulo}').click();
+    await new Promise(r => setTimeout(r, 250));
+    navigator.clipboard.writeText = real;
+    return capturado;
+  })()`;
+
+  const pelado = await evaluate(clicaECopia('Copiar o que falta'));
+  const linhas = pelado.split('\n');
+  check(
+    'copiar o que falta: sem colchete, uma linha por item que sobrou',
+    !pelado.includes('[') && linhas.length === 62 && linhas.every((l) => /\S \S/.test(l)),
+    linhas.length + ' linhas, começa com "' + linhas[0] + '"',
+  );
+
+  const md = await evaluate(clicaECopia('Copiar como Markdown'));
+  check(
+    'copiar como markdown: categorias e a marcação do que já foi',
+    md.includes('## Proteínas') && md.includes('- [x] ') && md.includes(' · '),
+    md.split('\n').length + ' linhas',
+  );
+
   const persisted = await evaluate(
     `Object.keys(localStorage).filter(k=>k.startsWith('feira:')).sort().join(',')`,
   );
@@ -202,8 +230,12 @@ try {
 
   const offlineOk = await evaluate(`document.querySelector('.brand h1')?.textContent`);
   check('abre offline', offlineOk === 'feira');
+  // 63 = os 62 do exemplo mais o pepino avulso adicionado lá em cima. Era 62
+  // enquanto o roteiro ia pro offline rápido demais e o pepino se perdia na
+  // folga de 300 ms do salvamento automático — a expectativa antiga descrevia
+  // uma escrita perdida, não o comportamento certo.
   const offlineItems = await evaluate(`document.querySelectorAll('.item').length`);
-  check('dados sobrevivem ao offline', offlineItems === 62, String(offlineItems));
+  check('dados sobrevivem ao offline', offlineItems === 63, String(offlineItems));
   const offlineFont = await evaluate(
     `(async()=>{await document.fonts.ready;return document.fonts.check('600 22px Fraunces')})()`,
   );
