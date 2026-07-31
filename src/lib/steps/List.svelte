@@ -5,6 +5,7 @@
   import { FREQ, MESES } from '../dic';
   import { brl0, brl2, toNum } from '../format';
   import { byCategory } from '../group';
+  import { toPlainText } from '../md';
   import { idasNoMes, itemCost, qtyPorIda, rawQty } from '../quantity';
   import { feira } from '../state.svelte';
   import { toast } from '../toaster.svelte';
@@ -70,18 +71,24 @@
     );
   }
 
-  async function copy() {
-    let txt = '🛒 Lista de ' + MESES[feira.ym.m] + ' ' + feira.ym.y + '\n';
-    for (const [cat, list] of sections) {
-      txt += '\n— ' + cat.toUpperCase() + ' —\n';
-      for (const i of list) {
-        txt += (feira.isChecked(i) ? '[x] ' : '[ ] ') + i.name + ' · ' + qtyLabel(i) + '\n';
-      }
-    }
-    txt += '\nTotal estimado: ' + brl0(total);
-    if (await copyText(txt)) toast.show('Lista copiada');
+  async function copiar(txt: string, ok: string) {
+    if (await copyText(txt)) toast.show(ok);
     else alert(txt);
   }
+
+  /*
+   * Dois destinos, dois formatos. Colar nos Lembretes do iPhone quer texto
+   * pelado: colchete e cabeçalho de categoria entrariam literais no lembrete, e
+   * a lista tipo "Compras" categoriza melhor sozinha do que respeitando o
+   * CATORDER colado. Markdown é pro que fica guardado e volta pra cá.
+   */
+  function copiarLembretes() {
+    const txt = toPlainText(on, feira.checks, feira.cfg);
+    if (!txt) return toast.show('Não falta nada pra comprar');
+    return copiar(txt, 'O que falta, copiado');
+  }
+
+  const copiarMd = () => copiar(feira.toMd('lista'), 'Markdown copiado');
 
   async function resetMonth() {
     if (!confirm('Limpar as marcações de ' + MESES[feira.ym.m] + '?')) return;
@@ -198,7 +205,8 @@
 
 <div class="panel noprint">
   <div class="btnrow" style="margin-top:0">
-    <button class="btn" onclick={copy}>Copiar como texto</button>
+    <button class="btn" onclick={copiarLembretes}>Copiar o que falta</button>
+    <button class="btn" onclick={copiarMd}>Copiar como Markdown</button>
     <button class="btn" onclick={() => window.print()}>Imprimir / PDF</button>
     <button class="btn danger" onclick={resetMonth}>Recomeçar o mês</button>
   </div>
