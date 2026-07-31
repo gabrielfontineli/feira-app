@@ -1,6 +1,8 @@
 <script lang="ts">
+  import Prompt from '../Prompt.svelte';
   import { brl2, norm } from '../format';
   import { parseNF } from '../parseNF';
+  import { AVISO, NOTA } from '../prompts';
   import {
     aceitarPendente,
     isStale,
@@ -92,6 +94,12 @@
   desconto · vl. total</b>. Dá pra pegar esse texto no site da NFC-e, no app do mercado, ou
   fotografando o papel e usando o copiar-texto do próprio celular.
 </div>
+<Prompt
+  texto={NOTA}
+  aviso={AVISO}
+  chamada="O copiar-texto do celular embaralhou as colunas? Mande a foto do cupom pra uma LLM com
+  este pedido: ela devolve as colunas do jeito que o app lê."
+/>
 <textarea bind:value={text} {placeholder}></textarea>
 <div class="btnrow">
   <button class="btn primary" onclick={read}>Ler nota fiscal</button>

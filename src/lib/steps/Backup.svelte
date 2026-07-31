@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Prompt from '../Prompt.svelte';
+  import { AVISO, LISTA_MD } from '../prompts';
   import { feira } from '../state.svelte';
   import { toast } from '../toaster.svelte';
 
@@ -57,6 +59,12 @@
 <div class="btnrow" style="margin-top:0">
   <button class="btn" onclick={exportarMd}>Exportar como .md</button>
 </div>
+<Prompt
+  texto={LISTA_MD}
+  aviso={AVISO}
+  chamada="Quer montar uma lista do zero conversando com uma LLM? Este pedido faz ela responder já
+  neste formato — salve como .md e importe aqui em cima."
+/>
 
 <h3>preços em lote</h3>
 <p class="small">
