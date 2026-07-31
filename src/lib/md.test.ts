@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CFG } from './cfg';
+import { EX_BASE, exampleItems } from './example';
 import { fromMd, toMd, toPlainText } from './md';
+import { itemCost } from './quantity';
 import type { Cfg, Item } from './types';
 
 const cfg: Cfg = { ...DEFAULT_CFG, pessoas: 3, dias: 28, loss: 20, vale: 800, extras: 1 };
@@ -168,10 +170,16 @@ describe('fromMd', () => {
     expect(fromMd(md, '2026-08').itens[0].cook).toBe(false);
   });
 
-  it('`cozinha` sem porcentagem liga o cozimento sem forçar perda', () => {
-    const [i] = fromMd('- Filé de frango · cozinha', '2026-08').itens;
+  it('`cozinha` sem porcentagem apaga a perda que o dicionário traria', () => {
+    // O DIC dá 18% pra tilápia. Sem porcentagem escrita, a perda é a do cfg —
+    // herdar os 18 mudaria quanto comprar só por ter passado pelo arquivo.
+    const [i] = fromMd('- Peixe (tilápia) · cozinha', '2026-08').itens;
     expect(i.cook).toBe(true);
     expect(i.loss).toBeUndefined();
+  });
+
+  it('`cozinha 18%` guarda a perda escrita', () => {
+    expect(fromMd('- Peixe · cozinha 18%', '2026-08').itens[0].loss).toBe(18);
   });
 
   it('o que não é campo conhecido vira nota', () => {
@@ -208,6 +216,22 @@ describe('fromMd', () => {
     // um `Partial<Cfg>` com NaN dentro é armadilha pra quem ler daqui.
     const r = fromMd('## ajustes\n- pessoas: banana\n- dias: 28', '2026-08');
     expect(r.cfg).toEqual({ dias: 28 });
+  });
+});
+
+describe('a lista de exemplo inteira', () => {
+  it('atravessa a ida e volta sem mudar o custo do mês', () => {
+    // O exemplo é a lista real de uma casa: 60 e poucos itens, com cozimento,
+    // frequências misturadas, item desligado e acento em tudo. Se o custo total
+    // sobreviver, o formato aguenta o dado de verdade.
+    const itens = exampleItems();
+    const custo = (list: Item[]) => list.reduce((s, i) => s + itemCost(i, cfg), 0);
+    const md = toMd({ cfg, itens, base: EX_BASE, checks: {}, mes: '2026-08' }, 'tudo');
+    const volta = fromMd(md, '2026-08');
+
+    expect(volta.itens).toHaveLength(itens.length);
+    expect(volta.itens.map(carregado)).toEqual(itens.map(carregado));
+    expect(custo(volta.itens)).toBeCloseTo(custo(itens), 6);
   });
 });
 

@@ -4,18 +4,27 @@
 
   let { pickFile, go }: { pickFile: () => void; go: (i: number) => void } = $props();
 
-  async function exportar() {
-    const dump = await feira.backup();
-    const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
+  function baixar(nome: string, tipo: string, conteudo: string) {
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download =
-      'feira-backup-' + feira.ym.y + '-' + String(feira.ym.m + 1).padStart(2, '0') + '.json';
+    a.href = URL.createObjectURL(new Blob([conteudo], { type: tipo }));
+    a.download = nome;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+  }
+
+  const sufixo = () => feira.ym.y + '-' + String(feira.ym.m + 1).padStart(2, '0');
+
+  async function exportar() {
+    const dump = await feira.backup();
+    baixar('feira-backup-' + sufixo() + '.json', 'application/json', JSON.stringify(dump, null, 2));
     toast.show('Backup exportado');
+  }
+
+  function exportarMd() {
+    baixar('feira-' + sufixo() + '.md', 'text/markdown', feira.toMd('tudo'));
+    toast.show('Markdown exportado');
   }
 
   async function nuke() {
@@ -32,7 +41,21 @@
 </p>
 <div class="btnrow" style="margin-top:0">
   <button class="btn primary" onclick={exportar}>Exportar backup (.json)</button>
-  <button class="btn" onclick={pickFile}>Importar backup</button>
+  <button class="btn" onclick={pickFile}>Importar (.json ou .md)</button>
+</div>
+
+<h3>markdown</h3>
+<p class="small">
+  O mesmo conteúdo num arquivo que dá pra ler e editar em qualquer lugar — Obsidian, Notas, um
+  editor de texto. Mexer nele e importar de volta funciona: arquivo com a seção <b>ajustes</b>
+  substitui a sua lista; arquivo só de itens soma à que já existe, pulando nome repetido.
+</p>
+<p class="small">
+  Não substitui o <b>.json</b>: o Markdown leva o mês aberto, e deixa de fora o histórico dos meses
+  passados e o desfazer dos preços digitados.
+</p>
+<div class="btnrow" style="margin-top:0">
+  <button class="btn" onclick={exportarMd}>Exportar como .md</button>
 </div>
 
 <h3>preços em lote</h3>

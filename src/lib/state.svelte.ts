@@ -1,5 +1,7 @@
 import { DEFAULT_CFG, toCfg } from './cfg';
 import { checkKey, remapChecks } from './checks';
+import { norm } from './format';
+import { fromMd, toMd } from './md';
 import { registrarPago, type PriceConflict } from './prices';
 import { naLista } from './quantity';
 import { allKeys, ddel, dget, dset } from './storage';
@@ -193,6 +195,48 @@ class Feira {
     await this.migrate();
     await this.loadChecks();
     this.persistNow();
+  }
+
+  /** O mês aberto como Markdown. `'lista'` leva só o que está na lista dele. */
+  toMd(escopo: 'tudo' | 'lista'): string {
+    return toMd(
+      { cfg: this.cfg, itens: this.itens, base: this.base, checks: this.checks, mes: this.mes },
+      escopo,
+    );
+  }
+
+  /**
+   * Lê um `.md`. Arquivo com ajustes ou preços é backup e **substitui**;
+   * arquivo só de itens é lista e **soma**, pulando nome que já existe. A
+   * diferença evita o pior caso do formato ser tolerante: colar uma lista de
+   * dieta de dez linhas não pode apagar a lista inteira da casa.
+   */
+  async restoreMd(text: string): Promise<{ completo: boolean; add: number }> {
+    const d = fromMd(text, this.mes, this.cfg);
+    if (!d.itens.length) throw new Error('formato');
+    const completo = !!(d.cfg || d.base);
+    let add = d.itens.length;
+
+    if (completo) {
+      if (d.cfg) this.cfg = toCfg({ ...this.cfg, ...d.cfg });
+      this.itens = d.itens;
+      if (d.base) this.base = d.base;
+      this.checks = d.checks;
+    } else {
+      const tem = new Set(this.itens.map((i) => norm(i.name)));
+      add = 0;
+      for (const i of d.itens) {
+        if (tem.has(norm(i.name))) continue;
+        this.itens.push(i);
+        add++;
+      }
+      Object.assign(this.checks, d.checks);
+    }
+
+    this.cfg.started = 1;
+    await dset(this.key, this.checks);
+    this.persistNow();
+    return { completo, add };
   }
 
   async nuke() {

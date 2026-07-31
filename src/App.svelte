@@ -29,11 +29,18 @@
     const f = input.files?.[0];
     if (!f) return;
     try {
-      await feira.restore(JSON.parse(await f.text()));
+      const txt = await f.text();
+      if (/\.md$/i.test(f.name)) {
+        // Markdown só de itens soma à lista; com ajustes ou preços, substitui.
+        const { completo, add } = await feira.restoreMd(txt);
+        toast.show(completo ? add + ' itens importados' : add + ' itens adicionados');
+      } else {
+        await feira.restore(JSON.parse(txt));
+        toast.show(feira.itens.length + ' itens importados');
+      }
       go(4);
-      toast.show(feira.itens.length + ' itens importados');
     } catch {
-      alert('Não consegui ler esse arquivo. Ele precisa ser um backup .json exportado pelo próprio app.');
+      alert('Não consegui ler esse arquivo. Ele precisa ser um .json ou um .md exportado pelo próprio app.');
     }
     input.value = '';
   }
@@ -69,7 +76,13 @@
     <section class="panel"><Backup {go} pickFile={() => fileInput.click()} /></section>
   {/if}
 
-  <input type="file" bind:this={fileInput} accept="application/json,.json" class="hide" onchange={onFile} />
+  <input
+    type="file"
+    bind:this={fileInput}
+    accept="application/json,.json,text/markdown,text/plain,.md"
+    class="hide"
+    onchange={onFile}
+  />
 
   <footer>
     Feira · lista de mercado do mês. Seus dados nunca saem deste aparelho.<br />

@@ -211,8 +211,13 @@ function lerItem(nome: string, partes: string[], cat: string, cfg: Cfg, mes: str
   if (c.qty !== undefined) it.qty = c.qty;
   if (c.unit) it.unit = c.unit;
   if (c.freq) it.freq = c.freq;
-  if (c.cook !== undefined) it.cook = c.cook;
-  if (c.loss !== undefined) it.loss = c.loss;
+  // `cozinha` sem porcentagem quer dizer "perda a do cfg", e precisa apagar a
+  // perda que o dicionário trouxe: o exemplo cozinha a tilápia pelos 25% do
+  // cfg, e herdar os 18% do DIC mudava quanto comprar na ida e volta.
+  if (c.cook !== undefined) {
+    it.cook = c.cook;
+    it.loss = c.cook ? c.loss : undefined;
+  }
   if (c.price !== undefined) it.price = c.price;
   if (c.soHoje) it.soHoje = c.soHoje;
   if (c.on === false) it.on = false;
