@@ -61,6 +61,15 @@ export function qtyPorIda(it: Item, cfg: Cfg): number {
   return rawQty(it, cfg) / idasNoMes(it.freq, cfg);
 }
 
+/**
+ * Item que a lista de um mês mostra: ligado, e não é avulso de outro mês. Mora
+ * aqui, puro, porque quem exporta a lista precisa da mesma regra que a tela —
+ * `feira.naLista` é só o atalho que já sabe qual mês está aberto.
+ */
+export function naLista(it: Item, mes: string): boolean {
+  return it.on && (!it.soHoje || it.soHoje === mes);
+}
+
 /** Respeita os interruptores de limpeza / higiene / extras. */
 export function allowed(e: DicEntry | null, cfg: Cfg): boolean {
   if (!e) return true;
