@@ -70,8 +70,12 @@
     <div>
       <label>
         Categoria
+        <!-- Mais as categorias em uso: `byCategory` preserva a categoria que
+             não está no CATORDER, e um item vindo de um .md com categoria
+             própria abria o select em branco — encostar nele trocava a
+             categoria por outra, sem aviso. -->
         <select bind:value={item.cat}>
-          {#each CATORDER as c (c)}
+          {#each [...new Set([...CATORDER, ...feira.itens.map((i) => i.cat)])] as c (c)}
             <option value={c}>{c}</option>
           {/each}
         </select>

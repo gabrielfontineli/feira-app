@@ -48,7 +48,7 @@
       <span class="ic">📂</span>
       <span>
         <span class="t">Importar backup</span>
-        <span class="d">Tem um arquivo <b>.json</b> exportado antes? Carregue aqui.</span>
+        <span class="d">Tem um <b>.json</b> ou um <b>.md</b> exportado antes? Carregue aqui.</span>
       </span>
     </button>
   </div>

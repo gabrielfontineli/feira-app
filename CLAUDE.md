@@ -192,6 +192,43 @@ Spec em `docs/superpowers/specs/2026-07-30-lista-ux-design.md`.
 - Avulso de mês passado continua em `feira.itens`, visível e apagável no editor.
   Sem limpeza automática: seria apagar dado do usuário pelas costas.
 
+## Markdown, e os pedidos prontos pra LLM
+
+Spec do diagnóstico que veio junto: `docs/superpowers/specs/2026-07-31-ux-diagnostico.md`.
+
+- **`md.ts` é um formato só, com parser tolerante.** Só o nome do item é
+  obrigatório; todo campo depois dele é reconhecido pela forma (`4 kg`,
+  `semana`, `cozinha 25%`, `R$ 24,90`, `hoje`), em qualquer ordem. É isso que
+  faz um arquivo de dieta ("um ingrediente por linha") e um backup completo
+  passarem pela mesma função.
+- **O `.md` não substitui o `.json`.** Leva `cfg`, itens, base de preços e as
+  marcações do mês aberto. Deixa de fora o histórico dos meses passados e o
+  `Pago.prev` — o desfazer do preço digitado —, e arredonda preço de base ao
+  centavo. Está dito na tela e no comentário dentro do arquivo.
+- **Arquivo com `## ajustes` ou `## preços aprendidos` substitui; arquivo só de
+  itens soma.** Sem essa divisão, colar uma lista de dieta de dez linhas apagava
+  a lista inteira da casa. Quem decide é `feira.restoreMd`.
+- **O marcador `cru` existe pra ida e volta não mudar quantidade de compra.**
+  Item que o `DIC` cozinha e o usuário desligou voltaria cozinhando. Pelo mesmo
+  motivo, `cozinha` sem porcentagem **apaga** a perda que o `DIC` traria: o
+  exemplo cozinha a tilápia pelos 25% do cfg, e herdar os 18% do dicionário
+  mudava quanto comprar. Os dois têm teste — não apague.
+- **Quantidade no `.md` é a do mês, como está no `Item.qty`**, não a da ida. O
+  número de carrinho é o `toPlainText`, que é outra saída.
+- **`toPlainText` é o texto de colar nos Lembretes do iPhone**: só o que falta,
+  uma linha por item, sem colchete e sem cabeçalho de categoria. Colchete entra
+  literal no lembrete, e a lista tipo "Compras" do iOS 17 categoriza melhor
+  sozinha do que respeitando um `CATORDER` colado. Falta conferir em aparelho se
+  colar multilinha vira mesmo um lembrete por linha.
+- **`DEFAULT_CFG` e `toCfg` moraram no `state.svelte.ts` e agora são
+  `cfg.ts`**: o vitest roda sem o plugin do Svelte, então módulo puro não pode
+  importar arquivo com runa. `naLista` foi pro `quantity.ts` pelo mesmo tipo de
+  motivo — exportar a lista precisa da mesma regra da tela.
+- **Prompt é texto, então não quebra o build — quebra a importação em silêncio.**
+  Cada um em `prompts.ts` tem contrato com um parser (`DIETA`/`CARDAPIO` com o
+  `cross()`, `NOTA` com o `parseNF`, `LISTA_MD` com o `fromMd`), e
+  `prompts.test.ts` passa o exemplo de cada prompt pelo parser que ele promete.
+
 ## Fase 3 — sincronizar entre aparelhos (proposta antes de código)
 
 Duas pessoas, uma lista, os mesmos check-marks. Restrições dadas:
@@ -206,9 +243,18 @@ Nada de código antes de a abordagem ser aprovada.
 
 ## Limpezas de UX (quando sair barato)
 
-- categorias renomeáveis, adicionáveis e reordenáveis pelo usuário, no lugar do
-  `CATORDER` fixo em `src/lib/dic.ts` (consumido por `src/lib/group.ts`). É o
-  spec 2 já acordado: mexe em `Item.cat` de todo item salvo e pede migração;
+Diagnóstico com atrito concreto, custo e ordem sugerida:
+`docs/superpowers/specs/2026-07-31-ux-diagnostico.md`. O resumo do que ele
+achou: a segunda linha do item aparece em 51 dos 67 do exemplo e é informação de
+planejamento, a lista reflui embaixo do polegar quando o campo de preço nasce, e
+os números do nav ensinam um wizard que o app já não é.
+
+- só **reordenar** categoria (`cfg.ordem: string[]`, lida pelo `group.ts`) pega
+  quase todo o valor sem migração nenhuma: lista vazia quer dizer `CATORDER`, e
+  categoria fora dela já cai no fim hoje;
+- categorias renomeáveis e adicionáveis, no lugar do `CATORDER` fixo em
+  `src/lib/dic.ts`, é o spec 2 já acordado e continua caro: mexe em `Item.cat`
+  de todo item salvo e pede migração;
 - gasto por categoria na lista final;
 - comparação de gasto mês a mês, a partir do histórico guardado;
 - Web Share API no "copiar como texto" e na exportação, pra funcionar no
